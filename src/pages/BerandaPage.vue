@@ -8,9 +8,17 @@ const featuredTools = tools.slice(0, 3)
 
 const categories = [
   { name: 'Developer', icon: 'mdi:code-tags', color: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' },
-  { name: 'Teks', icon: 'mdi:text-box-outline', color: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300' },
-  { name: 'Gambar', icon: 'mdi:image-outline', color: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
-  { name: 'Produktivitas', icon: 'mdi:lightning-bolt-outline', color: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
+  { name: 'Text', icon: 'mdi:text-box-outline', color: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300' },
+  { name: 'Image', icon: 'mdi:image-outline', color: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
+  { name: 'PDF', icon: 'mdi:file-pdf-box', color: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300' },
+  { name: 'Converter', icon: 'mdi:swap-horizontal', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300' },
+  { name: 'File', icon: 'mdi:file-outline', color: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300' },
+  { name: 'Design', icon: 'mdi:palette-outline', color: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300' },
+  { name: 'Productivity', icon: 'mdi:lightning-bolt-outline', color: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
+  { name: 'Calculator', icon: 'mdi:calculator-variant-outline', color: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300' },
+  { name: 'Security & Privacy', icon: 'mdi:shield-lock-outline', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' },
+  { name: 'Web', icon: 'mdi:web', color: 'bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300' },
+  { name: 'Data', icon: 'mdi:database-outline', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300' },
 ]
 
 const benefits = [
@@ -112,8 +120,8 @@ const benefits = [
 
       <section class="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div class="mx-auto grid max-w-6xl grid-cols-2 divide-x divide-slate-200 px-5 py-8 dark:divide-slate-700 sm:px-8 md:grid-cols-4">
-          <div class="px-4 text-center first:pl-0"><p class="text-2xl font-black text-slate-950 dark:text-white sm:text-3xl">6+</p><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Free tools</p></div>
-          <div class="px-4 text-center"><p class="text-2xl font-black text-slate-950 dark:text-white sm:text-3xl">4</p><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Kategori</p></div>
+          <div class="px-4 text-center first:pl-0"><p class="text-2xl font-black text-slate-950 dark:text-white sm:text-3xl">{{ tools.length }}</p><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Free tool aktif</p></div>
+          <div class="px-4 text-center"><p class="text-2xl font-black text-slate-950 dark:text-white sm:text-3xl">12</p><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Kategori</p></div>
           <div class="mt-6 border-l-0 px-4 text-center md:mt-0 md:border-l"><p class="text-2xl font-black text-slate-950 dark:text-white sm:text-3xl">100%</p><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Gratis</p></div>
           <div class="mt-6 px-4 text-center last:pr-0 md:mt-0"><p class="text-2xl font-black text-slate-950 dark:text-white sm:text-3xl">24/7</p><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Siap diakses</p></div>
         </div>
@@ -174,7 +182,7 @@ const benefits = [
 
     <footer class="border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-5 py-7 text-sm text-slate-500 dark:text-slate-400 sm:flex-row sm:px-8">
-        <p class="font-semibold text-slate-700 dark:text-slate-200">Dirgasatya Free Tools</p>
+        <p class="font-semibold text-slate-700 dark:text-slate-200">Dearga Free Tools</p>
         <p>Dibuat untuk membantu pekerjaan digital sehari-hari.</p>
       </div>
     </footer>

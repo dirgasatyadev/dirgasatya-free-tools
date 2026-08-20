@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 export type Theme = 'light' | 'dark'
 
-const storageKey = 'dirgasatya-theme'
+const storageKey = 'dearga-theme'
 
 export const useThemeStore = defineStore('theme', () => {
   const theme = ref<Theme>('light')

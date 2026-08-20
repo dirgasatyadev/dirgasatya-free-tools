@@ -18,6 +18,21 @@ const router = createRouter({
       name: 'about',
       component: () => import('@/pages/AboutPage.vue'),
     },
+    {
+      path: '/changelog',
+      name: 'changelog',
+      component: () => import('@/pages/ChangelogPage.vue'),
+    },
+    {
+      path: '/tools/png-to-avif',
+      name: 'png-to-avif',
+      component: () => import('@/pages/PNGToAvifPage.vue'),
+    },
+    {
+      path: '/tools/green-screen-remover',
+      name: 'green-screen-remover',
+      component: () => import('@/pages/GreenScreenRemoverPage.vue'),
+    },
   ],
 })
 

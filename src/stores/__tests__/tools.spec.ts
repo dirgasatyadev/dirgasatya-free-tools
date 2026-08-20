@@ -6,16 +6,36 @@ import { useToolsStore } from '@/stores/tools'
 describe('tools store', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('menampilkan seluruh dummy tool saat pencarian kosong', () => {
+  it('menampilkan seluruh tool aktif saat pencarian kosong', () => {
     const store = useToolsStore()
     expect(store.filteredTools).toHaveLength(tools.length)
   })
 
+  it('menampilkan seluruh tool aktif', () => {
+    const store = useToolsStore()
+
+    expect(store.visibleTools.map((tool) => tool.name)).toEqual([
+      'PNG to AVIF',
+      'Green Screen Remover',
+    ])
+    expect(store.hasMore).toBe(false)
+    expect(store.remainingCount).toBe(0)
+  })
+
+  it('tidak menambah data ketika seluruh tool sudah terlihat', () => {
+    const store = useToolsStore()
+
+    store.loadMore()
+
+    expect(store.visibleTools).toHaveLength(tools.length)
+    expect(store.hasMore).toBe(false)
+    expect(store.remainingCount).toBe(0)
+  })
+
   it('memfilter tool tanpa membedakan kapital', () => {
     const store = useToolsStore()
-    store.query = 'DEVELOPER'
-    expect(store.filteredTools.length).toBeGreaterThan(0)
-    expect(store.filteredTools.every((tool) => tool.category === 'Developer')).toBe(true)
+    store.query = 'avif'
+    expect(store.filteredTools.map((tool) => tool.name)).toEqual(['PNG to AVIF'])
   })
 
   it('menghasilkan daftar kosong untuk pencarian yang tidak cocok', () => {
@@ -26,29 +46,44 @@ describe('tools store', () => {
 
   it('memfilter tool berdasarkan kategori', () => {
     const store = useToolsStore()
-    store.selectedCategory = 'Teks'
+    store.selectedCategory = 'Image'
 
-    expect(store.filteredTools).toHaveLength(1)
-    expect(store.filteredTools.every((tool) => tool.category === 'Teks')).toBe(true)
+    expect(store.filteredTools).toHaveLength(2)
+    expect(store.filteredTools.every((tool) => tool.category === 'Image')).toBe(true)
+  })
+
+  it('mengosongkan hasil saat kategori tidak mempunyai tool aktif', () => {
+    const store = useToolsStore()
+    store.selectedCategory = 'Developer'
+
+    expect(store.filteredTools).toEqual([])
   })
 
   it('menggabungkan filter kategori dan pencarian', () => {
     const store = useToolsStore()
-    store.selectedCategory = 'Developer'
-    store.query = 'uuid'
+    store.selectedCategory = 'Image'
+    store.query = 'avif'
 
-    expect(store.filteredTools.map((tool) => tool.name)).toEqual(['Generator UUID'])
+    expect(store.filteredTools.map((tool) => tool.name)).toEqual(['PNG to AVIF'])
   })
 
   it('mereset seluruh filter', () => {
     const store = useToolsStore()
-    store.selectedCategory = 'Gambar'
-    store.query = 'kompres'
+    store.selectedCategory = 'Image'
+    store.query = 'png'
 
     store.resetFilters()
 
     expect(store.query).toBe('')
     expect(store.selectedCategory).toBe('Semua')
     expect(store.filteredTools).toHaveLength(tools.length)
+  })
+
+  it('mengarah ke halaman konverter yang tersedia', () => {
+    expect(tools[0]).toMatchObject({
+      category: 'Image',
+      path: '/tools/png-to-avif',
+      status: 'available',
+    })
   })
 })

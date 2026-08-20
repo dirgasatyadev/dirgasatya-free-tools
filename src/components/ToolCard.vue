@@ -25,14 +25,14 @@ defineProps<{
     <h2 class="mt-2 text-xl font-bold text-slate-950 dark:text-white">{{ tool.name }}</h2>
     <p class="mt-2 grow leading-7 text-slate-600 dark:text-slate-400">{{ tool.description }}</p>
 
-    <a
-      :href="tool.path"
+    <RouterLink
+      :to="tool.path"
       class="mt-6 inline-flex items-center gap-2 font-semibold text-indigo-600 transition group-hover:gap-3 dark:text-indigo-400"
       :aria-disabled="tool.status === 'coming-soon'"
       @click="tool.status === 'coming-soon' && $event.preventDefault()"
     >
       {{ tool.status === 'available' ? 'Buka tool' : 'Dalam pengembangan' }}
       <Icon icon="mdi:arrow-right" class="size-5" aria-hidden="true" />
-    </a>
+    </RouterLink>
   </article>
 </template>

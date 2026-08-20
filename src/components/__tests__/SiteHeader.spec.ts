@@ -19,6 +19,7 @@ async function mountHeader() {
       { path: '/', component: { template: '<div />' } },
       { path: '/free-tools', component: { template: '<div />' } },
       { path: '/about', component: { template: '<div />' } },
+      { path: '/changelog', component: { template: '<div />' } },
     ],
   })
 

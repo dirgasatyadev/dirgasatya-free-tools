@@ -1,4 +1,4 @@
-# Dirgasatya Free Tools
+# Dearga Free Tools
 
 Kumpulan free tool berbasis Vue, TypeScript, Tailwind CSS, Pinia, dan Iconify MDI.
 

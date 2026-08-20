@@ -22,7 +22,7 @@ const values = [
           <p class="mt-6 font-bold text-indigo-600 dark:text-indigo-400">Tentang project</p>
           <h1 class="mt-2 text-4xl font-black tracking-tight text-slate-950 dark:text-white sm:text-5xl">Alat bantu yang fokus pada hal penting.</h1>
           <p class="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-400">
-            Dirgasatya Free Tools adalah project kumpulan utilitas web praktis. Versi ini masih menggunakan data dummy dan akan terus berkembang menjadi tool yang benar-benar dapat digunakan.
+            Dearga Free Tools adalah kumpulan utilitas web praktis yang dapat langsung digunakan. Tool pemrosesan file dirancang berjalan di browser agar file tetap berada di perangkat Anda.
           </p>
         </div>
       </section>

@@ -8,8 +8,10 @@ const navigation = [
   { label: 'Beranda', to: '/' },
   { label: 'Free Tools', to: '/free-tools' },
   { label: 'About', to: '/about' },
+  { label: 'Changelog', to: '/changelog' },
 ]
 
+const logoPath = '/images/logo.png'
 const route = useRoute()
 const isMenuOpen = ref(false)
 
@@ -42,19 +44,17 @@ onUnmounted(() => {
   <header class="border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
     <nav class="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8" aria-label="Navigasi utama">
       <RouterLink to="/" class="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-950 dark:text-white">
-        <span class="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white shadow-sm">
-          <Icon icon="mdi:toolbox-outline" class="size-5" aria-hidden="true" />
-        </span>
-        Dirgasatya Tools
+        <img :src="logoPath" alt="" class="size-10 object-contain" width="40" height="40" />
+        Dearga Tools
       </RouterLink>
 
-      <div class="hidden items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800 md:flex">
+      <div class="hidden items-center gap-7 md:flex">
         <RouterLink
           v-for="item in navigation"
           :key="item.to"
           :to="item.to"
-          class="rounded-full px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white sm:px-4"
-          active-class="bg-white text-indigo-700 shadow-sm dark:bg-slate-700 dark:text-indigo-300"
+          class="py-2 text-sm font-semibold text-slate-600 transition hover:text-indigo-600 dark:text-slate-300 dark:hover:text-indigo-400"
+          active-class="text-indigo-700 dark:text-indigo-400"
           :exact="item.to === '/'"
         >
           {{ item.label }}
@@ -111,10 +111,8 @@ onUnmounted(() => {
       >
         <div class="flex items-center justify-between border-b border-slate-200 pb-5 dark:border-slate-700">
           <RouterLink to="/" class="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-950 dark:text-white" @click="closeMenu">
-            <span class="grid size-9 place-items-center rounded-xl bg-indigo-600 text-white shadow-sm">
-              <Icon icon="mdi:toolbox-outline" class="size-5" aria-hidden="true" />
-            </span>
-            Dirgasatya Tools
+            <img :src="logoPath" alt="" class="size-10 object-contain" width="40" height="40" />
+            Dearga Tools
           </RouterLink>
           <button
             type="button"

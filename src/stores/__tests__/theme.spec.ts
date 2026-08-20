@@ -14,7 +14,7 @@ describe('theme store', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('memuat tema yang tersimpan dari localStorage', () => {
-    localStorage.setItem('dirgasatya-theme', 'dark')
+    localStorage.setItem('dearga-theme', 'dark')
     const store = useThemeStore()
 
     store.initializeTheme()
@@ -31,7 +31,7 @@ describe('theme store', () => {
     store.initializeTheme()
 
     expect(store.theme).toBe('dark')
-    expect(localStorage.getItem('dirgasatya-theme')).toBe('dark')
+    expect(localStorage.getItem('dearga-theme')).toBe('dark')
   })
 
   it('mengganti tema dan menyimpan pilihan pengguna', () => {
@@ -41,6 +41,6 @@ describe('theme store', () => {
     store.toggleTheme()
 
     expect(store.theme).toBe('dark')
-    expect(localStorage.getItem('dirgasatya-theme')).toBe('dark')
+    expect(localStorage.getItem('dearga-theme')).toBe('dark')
   })
 })
