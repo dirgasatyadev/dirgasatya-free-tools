@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildCompressionOptions,
   createCompressedBaseName,
   createUniqueCompressedFileName,
   defaultCompressQuality,
@@ -13,6 +14,13 @@ import {
 describe('Compress Image helpers', () => {
   it('menggunakan kualitas default 75%', () => {
     expect(defaultCompressQuality).toBe(75)
+  })
+
+  it('memisahkan mode kualitas dari target ukuran dan selalu memakai worker', () => {
+    const qualityOptions = buildCompressionOptions(4 * 1024 * 1024, 'image/jpeg', 70, 'quality', 1)
+    expect(qualityOptions).toMatchObject({ initialQuality: 0.7, alwaysKeepResolution: true, maxIteration: 1, useWebWorker: true })
+    const targetOptions = buildCompressionOptions(4 * 1024 * 1024, 'image/jpeg', 70, 'target-size', 1)
+    expect(targetOptions).toMatchObject({ maxSizeMB: 1, initialQuality: 0.92, alwaysKeepResolution: false, maxIteration: 10, useWebWorker: true })
   })
 
   it('mengenali PNG, WebP, JPG, dan JPEG dari MIME atau ekstensi', () => {

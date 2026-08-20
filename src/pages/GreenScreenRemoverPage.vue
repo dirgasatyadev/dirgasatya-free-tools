@@ -15,7 +15,6 @@ import {
   createUniquePngFileName,
   getClampedSampleArea,
   maxGreenScreenFiles,
-  maxGreenScreenPixels,
   normalizePngBaseName,
   normalizePngFileName,
   useGreenScreenRemover,
@@ -25,6 +24,7 @@ import {
 
 const {
   items,
+  adaptiveMaxPixels,
   tolerance,
   softness,
   isProcessing,
@@ -403,8 +403,8 @@ async function createEditorOutputCanvas(item: GreenScreenItem) {
 
   const outputWidth = Math.max(1, Math.round(selection.width / displayedScale))
   const outputHeight = Math.max(1, Math.round(selection.height / displayedScale))
-  if (outputWidth * outputHeight > maxGreenScreenPixels) {
-    throw new Error('Resolusi hasil crop maksimal 40 megapiksel.')
+  if (outputWidth * outputHeight > adaptiveMaxPixels) {
+    throw new Error(`Resolusi hasil crop melebihi batas adaptif ${Math.round(adaptiveMaxPixels / 1_000_000)} MP.`)
   }
   const canvas = await selection.$toCanvas({ width: outputWidth, height: outputHeight })
   return applyCanvasCropShape(canvas, editorCropShape.value)
@@ -582,7 +582,7 @@ async function downloadAll() {
             <input type="file" accept="image/png,image/jpeg,image/webp,image/avif,.png,.jpg,.jpeg,.webp,.avif" multiple class="sr-only" :disabled="isProcessing || isPreparingDownload || items.length >= maxGreenScreenFiles" @change="handleFileInput" />
             <span class="grid size-14 place-items-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"><Icon icon="mdi:image-plus-outline" class="size-8" aria-hidden="true" /></span>
             <p class="mt-4 text-lg font-bold text-slate-950 dark:text-white">{{ items.length ? 'Tambahkan gambar lainnya' : 'Pilih atau tarik gambar green screen ke sini' }}</p>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ items.length }}/{{ maxGreenScreenFiles }} file · PNG, JPG, WebP, atau AVIF · maksimal 25 MB</p>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ items.length }}/{{ maxGreenScreenFiles }} file · PNG, JPG, WebP, atau AVIF · maksimal 25 MB dan {{ Math.round(adaptiveMaxPixels / 1_000_000) }} MP adaptif</p>
           </label>
 
           <div v-if="errorMessage" role="alert" class="mt-4 flex items-start gap-3 rounded-2xl bg-rose-50 p-4 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">

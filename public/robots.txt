@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://tools.dirgasatya.com/sitemap.xml

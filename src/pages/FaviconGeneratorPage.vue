@@ -6,7 +6,11 @@ import ToolTransferActions from '@/components/ToolTransferActions.vue'
 import {
   createFaviconBaseName,
   createFaviconFileName,
+  createFaviconHtmlSnippet,
   createFaviconManifest,
+  createMaskableIcon,
+  createPngIco,
+  createSvgFavicon,
   faviconSizes,
   normalizeFaviconWebsiteUrl,
   useFaviconGenerator,
@@ -41,6 +45,7 @@ useIncomingToolTransfer('favicon-generator', (files) => {
 
 const downloadMode = ref<'zip' | 'direct'>('zip')
 const websiteUrl = ref('')
+const assetPath = ref('/icons/')
 const selectedSizes = ref<number[]>(faviconSizes.map((item) => item.size))
 const isPreparingDownload = ref(false)
 const showDeleteConfirmation = ref(false)
@@ -59,6 +64,7 @@ const allSizesSelected = computed(() => selectedSizes.value.length === faviconSi
 const selectedCompletedCount = computed(
   () => results.value.filter((result) => selectedSizes.value.includes(result.size)).length,
 )
+const htmlSnippet = computed(() => createFaviconHtmlSnippet(baseName.value, assetPath.value))
 
 async function loadSourceFile(file: File) {
   selectedSizes.value = faviconSizes.map((item) => item.size)
@@ -115,7 +121,7 @@ function downloadResult(result: FaviconResult) {
   if (result.blob) triggerDownload(result.blob, createFaviconFileName(baseName.value, result.size))
 }
 
-function completedFiles(scope: 'all' | 'selected') {
+async function completedFiles(scope: 'all' | 'selected') {
   const selectedResults =
     scope === 'all'
       ? results.value
@@ -128,17 +134,38 @@ function completedFiles(scope: 'all' | 'selected') {
       fileName: createFaviconFileName(baseName.value, result.size),
     }
   })
+  if (!sourceFile.value) throw new Error('Sumber favicon tidak tersedia.')
+  const maskableResults = await Promise.all(selectedResults
+    .filter((result) => result.size === 192 || result.size === 512)
+    .map(async (result) => ({
+      size: result.size,
+      fileName: `${createFaviconBaseName(baseName.value)}-maskable-${result.size}x${result.size}.png`,
+      blob: await createMaskableIcon(sourceFile.value!, result.size, transparentBackground.value ? '#ffffff' : backgroundColor.value),
+    })))
   const manifest = createFaviconManifest(
     websiteUrl.value,
     baseName.value,
     transparentBackground.value ? '#ffffff' : backgroundColor.value,
-    selectedResults.map((result) => ({
+    [
+      ...selectedResults.filter((result) => result.size === 192 || result.size === 512).map((result) => ({
       size: result.size,
       fileName: createFaviconFileName(baseName.value, result.size),
-    })),
+        purpose: 'any' as const,
+      })),
+      ...maskableResults.map((result) => ({ size: result.size, fileName: result.fileName, purpose: 'maskable' as const })),
+    ],
+    assetPath.value,
   )
+  const icoSources = selectedResults.filter((result) => [16, 32, 48].includes(result.size) && result.blob).map((result) => ({ size: result.size, blob: result.blob! }))
+  const extras = [
+    ...(icoSources.length ? [{ blob: await createPngIco(icoSources), fileName: 'favicon.ico' }] : []),
+    { blob: await createSvgFavicon(sourceFile.value), fileName: 'favicon.svg' },
+    ...maskableResults.map((result) => ({ blob: result.blob, fileName: result.fileName })),
+    { blob: new Blob([htmlSnippet.value], { type: 'text/html;charset=utf-8' }), fileName: 'favicon-links.html' },
+  ]
   return [
     ...imageFiles,
+    ...extras,
     {
       blob: new Blob([manifest], { type: 'application/manifest+json' }),
       fileName: 'manifest.webmanifest',
@@ -151,7 +178,7 @@ async function downloadPackage(scope: 'all' | 'selected') {
   isPreparingDownload.value = true
   errorMessage.value = ''
   try {
-    const files = completedFiles(scope)
+    const files = await completedFiles(scope)
     if (downloadMode.value === 'zip') {
       const { BlobReader, BlobWriter, ZipWriter } = await import('@zip.js/zip.js')
       const writer = new ZipWriter(new BlobWriter('application/zip'))
@@ -232,7 +259,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleEscape))
         </section>
 
         <aside class="space-y-5">
-          <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"><h2 class="flex items-center gap-2 font-black text-slate-950 dark:text-white"><Icon icon="mdi:tune-variant" class="size-5 text-amber-500" /> Pengaturan</h2><label class="mt-5 block text-xs font-bold text-slate-500">Nama dasar file<div class="mt-1.5 flex"><input v-model="baseName" type="text" class="min-w-0 flex-1 rounded-l-xl border border-r-0 border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-amber-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white" @blur="normalizeBaseName" /><span class="rounded-r-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-800">.png</span></div></label><label class="mt-4 block text-xs font-bold text-slate-500">URL website<input v-model="websiteUrl" type="url" inputmode="url" class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-amber-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white" placeholder="https://example.com" @blur="normalizeWebsiteUrl" /></label><p class="mt-2 text-[11px] font-semibold leading-5 text-slate-400">Dipakai sebagai lokasi file ikon di manifest. Kosongkan untuk URL relatif dari root.</p><p class="mt-5 text-xs font-bold text-slate-500">Penempatan gambar</p><div class="mt-2 grid grid-cols-2 gap-2"><button type="button" class="rounded-xl border px-3 py-2.5 text-sm font-bold" :class="fitMode === 'contain' ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'" @click="fitMode = 'contain'">Contain</button><button type="button" class="rounded-xl border px-3 py-2.5 text-sm font-bold" :class="fitMode === 'cover' ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'" @click="fitMode = 'cover'">Cover</button></div><label class="mt-5 flex items-center justify-between gap-3 text-sm font-bold"><span>Background transparan</span><input v-model="transparentBackground" type="checkbox" class="size-5 accent-amber-500" /></label><label v-if="!transparentBackground" class="mt-4 flex items-center justify-between gap-3 text-sm font-bold"><span>Warna background</span><input v-model="backgroundColor" type="color" class="size-10 cursor-pointer rounded-lg border-0 bg-transparent" /></label><button type="button" class="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 font-bold text-white transition hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-950" :disabled="!sourceFile || isProcessing" @click="generate"><Icon :icon="isProcessing ? 'mdi:loading' : 'mdi:refresh'" class="size-5" :class="{ 'animate-spin': isProcessing }" /> Terapkan pengaturan</button></section>
+          <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"><h2 class="flex items-center gap-2 font-black text-slate-950 dark:text-white"><Icon icon="mdi:tune-variant" class="size-5 text-amber-500" /> Pengaturan</h2><label class="mt-5 block text-xs font-bold text-slate-500">Nama dasar file<div class="mt-1.5 flex"><input v-model="baseName" type="text" class="min-w-0 flex-1 rounded-l-xl border border-r-0 border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-amber-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white" @blur="normalizeBaseName" /><span class="rounded-r-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-800">.png</span></div></label><label class="mt-4 block text-xs font-bold text-slate-500">URL website<input v-model="websiteUrl" type="url" inputmode="url" class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-amber-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white" placeholder="https://example.com" @blur="normalizeWebsiteUrl" /></label><label class="mt-4 block text-xs font-bold text-slate-500">Path tujuan ikon<input v-model="assetPath" class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-sm font-semibold dark:border-slate-700 dark:bg-slate-950" placeholder="/icons/" /></label><p class="mt-2 text-[11px] font-semibold leading-5 text-slate-400">URL dan path dipakai oleh manifest serta snippet HTML.</p><p class="mt-5 text-xs font-bold text-slate-500">Penempatan gambar</p><div class="mt-2 grid grid-cols-2 gap-2"><button type="button" class="rounded-xl border px-3 py-2.5 text-sm font-bold" :class="fitMode === 'contain' ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'" @click="fitMode = 'contain'">Contain</button><button type="button" class="rounded-xl border px-3 py-2.5 text-sm font-bold" :class="fitMode === 'cover' ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'" @click="fitMode = 'cover'">Cover</button></div><label class="mt-5 flex items-center justify-between gap-3 text-sm font-bold"><span>Background transparan</span><input v-model="transparentBackground" type="checkbox" class="size-5 accent-amber-500" /></label><label v-if="!transparentBackground" class="mt-4 flex items-center justify-between gap-3 text-sm font-bold"><span>Warna background</span><input v-model="backgroundColor" type="color" class="size-10 cursor-pointer rounded-lg border-0 bg-transparent" /></label><button type="button" class="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 font-bold text-white transition hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-950" :disabled="!sourceFile || isProcessing" @click="generate"><Icon :icon="isProcessing ? 'mdi:loading' : 'mdi:refresh'" class="size-5" :class="{ 'animate-spin': isProcessing }" /> Terapkan pengaturan</button></section>
+          <section v-if="sourcePreviewUrl" class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"><h2 class="font-black">Maskable safe-zone</h2><div class="relative mx-auto mt-4 grid aspect-square w-48 place-items-center overflow-hidden rounded-3xl" :style="{ backgroundColor: transparentBackground ? '#ffffff' : backgroundColor }"><div class="absolute size-[80%] rounded-full border-2 border-dashed border-rose-500"></div><img :src="sourcePreviewUrl" alt="Preview safe zone ikon maskable" class="size-[80%] object-contain" /></div><p class="mt-3 text-xs leading-5 text-slate-500">Konten utama dijaga di dalam lingkaran safe-zone 80% untuk ikon PWA maskable.</p></section>
+          <section v-if="allCompleted" class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"><h2 class="font-black">HTML link snippet</h2><textarea :value="htmlSnippet" readonly rows="7" class="mt-3 w-full rounded-xl bg-slate-950 p-3 font-mono text-xs leading-5 text-emerald-300"></textarea></section>
           <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"><h2 class="flex items-center gap-2 font-black text-slate-950 dark:text-white"><Icon icon="mdi:format-list-numbered" class="size-5 text-amber-500" /> Ukuran tersedia</h2><ul class="mt-4 grid grid-cols-2 gap-2 text-xs font-bold text-slate-500"><li v-for="item in faviconSizes" :key="item.size" class="rounded-lg bg-slate-50 px-2.5 py-2 dark:bg-slate-950">{{ item.size }}×{{ item.size }}</li></ul><p class="mt-4 text-xs leading-5 text-slate-500">Semua hasil selalu PNG. Contain menjaga seluruh gambar; cover memenuhi kotak dengan kemungkinan crop.</p></section>
         </aside>
       </div>

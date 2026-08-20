@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   calculateAspectRatio,
+  calculateProportionalWidth,
   calculateCssClamp,
   calculateDownloadSeconds,
   calculatePercentage,
@@ -19,6 +20,9 @@ describe('calculator tool helpers', () => {
 
   it('menghitung aspect ratio dan ukuran proporsional', () => {
     expect(calculateAspectRatio(1920, 1080)).toMatchObject({ width: 16, height: 9 })
+    expect(calculateProportionalWidth(16, 9, 720)).toBe(1280)
+    expect(() => calculateAspectRatio(1920.5, 1080)).toThrow('bilangan bulat aman')
+    expect(() => calculateAspectRatio(Number.MAX_SAFE_INTEGER + 1, 1080)).toThrow('bilangan bulat aman')
     expect(calculateProportionalHeight(1920, 1080, 1280)).toBe(720)
   })
 

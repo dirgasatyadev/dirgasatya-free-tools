@@ -2,11 +2,11 @@
 import { Icon } from '@iconify/vue'
 import SiteHeader from '@/components/SiteHeader.vue'
 import ToolCard from '@/components/ToolCard.vue'
-import { tools } from '@/data/tools'
+import { toolCategories, tools } from '@/data/tools'
 
 const featuredTools = tools.slice(0, 3)
 
-const categories = [
+const categoryStyles = [
   { name: 'Developer', icon: 'mdi:code-tags', color: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' },
   { name: 'Text', icon: 'mdi:text-box-outline', color: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300' },
   { name: 'Image', icon: 'mdi:image-outline', color: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' },
@@ -20,6 +20,7 @@ const categories = [
   { name: 'Web', icon: 'mdi:web', color: 'bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300' },
   { name: 'Data', icon: 'mdi:database-outline', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300' },
 ]
+const categories = categoryStyles.filter((category) => toolCategories.includes(category.name as typeof toolCategories[number]))
 
 const benefits = [
   { icon: 'mdi:account-off-outline', title: 'Tanpa akun', text: 'Langsung gunakan tool tanpa registrasi.' },

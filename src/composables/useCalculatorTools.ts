@@ -21,11 +21,16 @@ function gcd(first: number, second: number): number {
   return second === 0 ? first : gcd(second, first % second)
 }
 
+export function validatePixelDimension(value: number, label: string) {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${label} harus berupa bilangan bulat aman minimal 1 pixel.`)
+  }
+  return value
+}
+
 export function calculateAspectRatio(width: number, height: number) {
-  positive(width, 'Lebar')
-  positive(height, 'Tinggi')
-  const integerWidth = Math.round(width)
-  const integerHeight = Math.round(height)
+  const integerWidth = validatePixelDimension(width, 'Lebar')
+  const integerHeight = validatePixelDimension(height, 'Tinggi')
   const divisor = gcd(integerWidth, integerHeight)
   return {
     width: integerWidth / divisor,
@@ -35,8 +40,17 @@ export function calculateAspectRatio(width: number, height: number) {
 }
 
 export function calculateProportionalHeight(width: number, height: number, targetWidth: number) {
-  positive(targetWidth, 'Lebar target')
+  validatePixelDimension(targetWidth, 'Lebar target')
   return (positive(height, 'Tinggi') / positive(width, 'Lebar')) * targetWidth
+}
+
+export function calculateProportionalWidth(width: number, height: number, targetHeight: number) {
+  validatePixelDimension(targetHeight, 'Tinggi target')
+  return (positive(width, 'Lebar') / positive(height, 'Tinggi')) * targetHeight
+}
+
+export function validateCustomRatio(width: number, height: number) {
+  return { width: positive(width, 'Rasio lebar'), height: positive(height, 'Rasio tinggi'), decimal: width / height }
 }
 
 export function calculateCssClamp(minSize: number, maxSize: number, minViewport: number, maxViewport: number, rootFontSize = 16) {

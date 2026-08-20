@@ -1,4 +1,7 @@
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { getAdaptiveAvifPixelLimit, supportsOffscreenImageProcessing } from '@/composables/imageSafety'
+import { encodeAvifInWorker } from '@/composables/image/imageWorker'
+import { useImageBatchQueue } from '@/composables/image/useImageBatchQueue'
 
 const maxFileSize = 25 * 1024 * 1024
 const maxPixels = 40_000_000
@@ -133,18 +136,10 @@ export function usePngToAvif() {
   const isDragging = ref(false)
   const errorMessage = ref('')
   let itemSequence = 0
+  let conversionController: AbortController | null = null
+  const adaptiveMaxPixels = getAdaptiveAvifPixelLimit()
 
-  const completedCount = computed(
-    () => items.value.filter((item) => item.status === 'completed').length,
-  )
-  const failedCount = computed(() => items.value.filter((item) => item.status === 'error').length)
-  const processedCount = computed(() => completedCount.value + failedCount.value)
-  const progressPercentage = computed(() =>
-    items.value.length === 0 ? 0 : Math.round((processedCount.value / items.value.length) * 100),
-  )
-  const hasProcessableItems = computed(() =>
-    items.value.some((item) => item.status === 'queued' || item.status === 'error'),
-  )
+  const { completedCount, failedCount, processedCount, progressPercentage, hasProcessableItems } = useImageBatchQueue(items)
 
   function revokeUrl(url: string) {
     if (url) URL.revokeObjectURL(url)
@@ -193,41 +188,45 @@ export function usePngToAvif() {
     revokeUrl(item.outputPreviewUrl)
   }
 
-  async function convertItem(
-    item: PngConversionItem,
-    encode: (data: ImageData, options: { quality: number; speed: number }) => Promise<ArrayBuffer>,
-    selectedQuality: number,
-  ) {
-    clearItemOutput(item)
-    item.status = 'processing'
-    item.errorMessage = ''
-    let bitmap: ImageBitmap | undefined
-
+  async function encodeSource(source: Blob, selectedQuality: number, signal?: AbortSignal) {
+    if (supportsOffscreenImageProcessing()) {
+      return encodeAvifInWorker({ source, quality: selectedQuality, maxPixels: adaptiveMaxPixels }, signal)
+    }
+    const bitmap = await createImageBitmap(source)
     try {
-      bitmap = await createImageBitmap(item.file)
-      const dimensionError = validateImageDimensions(bitmap.width, bitmap.height)
-      if (dimensionError) throw new Error(dimensionError)
-
+      if (bitmap.width * bitmap.height > adaptiveMaxPixels) throw new Error(`Resolusi PNG melebihi budget memory ${Math.round(adaptiveMaxPixels / 1_000_000)} MP.`)
       const canvas = document.createElement('canvas')
       canvas.width = bitmap.width
       canvas.height = bitmap.height
       const context = canvas.getContext('2d', { willReadFrequently: true })
       if (!context) throw new Error('Browser tidak dapat membaca gambar ini.')
-
       context.drawImage(bitmap, 0, 0)
       const imageData = context.getImageData(0, 0, bitmap.width, bitmap.height)
-      const encoded = await encode(imageData, { quality: selectedQuality, speed: 6 })
+      if (signal?.aborted) throw new DOMException('Konversi AVIF dibatalkan.', 'AbortError')
+      const { default: encode } = await import('@jsquash/avif/encode.js')
+      return encode(imageData, { quality: selectedQuality, speed: 6 })
+    } finally { bitmap.close() }
+  }
+
+  function canvasToPngBlob(canvas: HTMLCanvasElement) {
+    return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Browser tidak dapat membaca hasil crop.')), 'image/png'))
+  }
+
+  async function convertItem(item: PngConversionItem, selectedQuality: number, signal?: AbortSignal) {
+    clearItemOutput(item)
+    item.status = 'processing'
+    item.errorMessage = ''
+    try {
+      const encoded = await encodeSource(item.file, selectedQuality, signal)
 
       item.outputBlob = new Blob([encoded], { type: 'image/avif' })
       item.outputPreviewUrl = URL.createObjectURL(item.outputBlob)
       item.isCropped = false
       item.status = 'completed'
     } catch (error) {
-      item.status = 'error'
+      item.status = error instanceof DOMException && error.name === 'AbortError' ? 'queued' : 'error'
       item.errorMessage =
         error instanceof Error ? error.message : 'Konversi gagal. Silakan coba file PNG lain.'
-    } finally {
-      bitmap?.close()
     }
   }
 
@@ -237,7 +236,9 @@ export function usePngToAvif() {
     const item = items.value.find((candidate) => candidate.id === itemId)
     if (!item) return false
 
-    const dimensionError = validateImageDimensions(canvas.width, canvas.height)
+    const dimensionError = canvas.width * canvas.height > adaptiveMaxPixels
+      ? `Resolusi hasil crop melebihi budget memory ${Math.round(adaptiveMaxPixels / 1_000_000)} MP.`
+      : validateImageDimensions(canvas.width, canvas.height)
     if (dimensionError) {
       item.errorMessage = dimensionError
       return false
@@ -247,14 +248,12 @@ export function usePngToAvif() {
     item.status = 'processing'
     item.errorMessage = ''
     isConverting.value = true
+    const controller = new AbortController()
+    conversionController = controller
 
     try {
-      const context = canvas.getContext('2d', { willReadFrequently: true })
-      if (!context) throw new Error('Browser tidak dapat membaca hasil crop.')
-
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
-      const { default: encode } = await import('@jsquash/avif/encode.js')
-      const encoded = await encode(imageData, { quality: quality.value, speed: 6 })
+      const sourceBlob = await canvasToPngBlob(canvas)
+      const encoded = await encodeSource(sourceBlob, quality.value, controller.signal)
       const outputBlob = new Blob([encoded], { type: 'image/avif' })
 
       clearItemOutput(item)
@@ -269,6 +268,7 @@ export function usePngToAvif() {
         error instanceof Error ? error.message : 'Hasil crop tidak dapat dikonversi ke AVIF.'
       return false
     } finally {
+      conversionController = null
       isConverting.value = false
     }
   }
@@ -278,24 +278,31 @@ export function usePngToAvif() {
 
     errorMessage.value = ''
     isConverting.value = true
+    const controller = new AbortController()
+    conversionController = controller
     const selectedQuality = quality.value
 
     try {
-      const { default: encode } = await import('@jsquash/avif/encode.js')
       const queue = items.value.filter(
         (item) => item.status === 'queued' || item.status === 'error',
       )
 
       for (const item of queue) {
-        await convertItem(item, encode, selectedQuality)
+        if (controller.signal.aborted) break
+        await convertItem(item, selectedQuality, controller.signal)
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
       }
     } catch (error) {
       errorMessage.value =
         error instanceof Error ? error.message : 'Encoder AVIF tidak dapat dimuat oleh browser.'
     } finally {
+      conversionController = null
       isConverting.value = false
     }
+  }
+
+  function cancelConversion() {
+    conversionController?.abort()
   }
 
   function reset() {
@@ -309,6 +316,7 @@ export function usePngToAvif() {
   }
 
   onBeforeUnmount(() => {
+    conversionController?.abort()
     for (const item of items.value) {
       revokeUrl(item.inputPreviewUrl)
       revokeUrl(item.outputPreviewUrl)
@@ -317,6 +325,7 @@ export function usePngToAvif() {
 
   return {
     items,
+    adaptiveMaxPixels,
     quality,
     isConverting,
     isDragging,
@@ -329,6 +338,7 @@ export function usePngToAvif() {
     addFiles,
     removeItem,
     convertAll,
+    cancelConversion,
     applyCrop,
     reset,
   }

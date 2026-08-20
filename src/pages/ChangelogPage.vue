@@ -27,6 +27,10 @@ const scopeClasses: Record<ChangelogScope, string> = {
     'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
   'File, Data & Text Tools':
     'bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300',
+  'Security & Performance':
+    'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300',
+  'Correctness & Platform':
+    'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
 }
 </script>
 

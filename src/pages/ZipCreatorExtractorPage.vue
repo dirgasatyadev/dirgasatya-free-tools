@@ -9,6 +9,7 @@ const mode = ref<'create' | 'extract'>('create')
 const files = ref<File[]>([])
 const zipFile = ref<File | null>(null)
 const zipEntries = ref<ZipEntryInfo[]>([])
+const selectedEntryIndices = ref<number[]>([])
 const extracted = ref<(ExtractedZipFile & { url: string })[]>([])
 const archiveName = ref('archive')
 const compressionLevel = ref(6)
@@ -20,6 +21,8 @@ const zipResultUrl = ref('')
 const zipResultSize = ref(0)
 const inputSize = computed(() => files.value.reduce((total, file) => total + file.size, 0))
 const fileEntryCount = computed(() => zipEntries.value.filter((entry) => !entry.directory).length)
+const safeEntries = computed(() => zipEntries.value.filter((entry) => !entry.directory && !entry.safetyIssue))
+const selectedSize = computed(() => zipEntries.value.filter((entry) => selectedEntryIndices.value.includes(entry.index)).reduce((total, entry) => total + entry.uncompressedSize, 0))
 
 function revokeResults() {
   if (zipResultUrl.value) URL.revokeObjectURL(zipResultUrl.value)
@@ -38,6 +41,7 @@ async function selectZip(file?: File) {
   revokeResults()
   zipFile.value = file
   zipEntries.value = []
+  selectedEntryIndices.value = []
   isProcessing.value = true
   errorMessage.value = ''
   try { zipEntries.value = await listZipEntries(file) }
@@ -75,12 +79,20 @@ async function extractArchive() {
   errorMessage.value = ''
   revokeResults()
   try {
-    const results = await extractZipFiles(zipFile.value, (done, total) => (progress.value = done / total))
+    const results = await extractZipFiles(zipFile.value, selectedEntryIndices.value, (done, total) => (progress.value = done / total))
     extracted.value = results.map((item) => ({ ...item, url: URL.createObjectURL(item.blob) }))
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'ZIP tidak dapat diekstrak.' }
   finally { isProcessing.value = false }
 }
 function extractedUrl(index: number) { return extracted.value.find((item) => item.index === index)?.url ?? '' }
+function selectSafeEntries() {
+  let total = 0
+  selectedEntryIndices.value = safeEntries.value.slice(0, 250).filter((entry) => {
+    if (total + entry.uncompressedSize > 512 * 1024 * 1024) return false
+    total += entry.uncompressedSize
+    return true
+  }).map((entry) => entry.index)
+}
 function safeDownloadName(name: string) { return name.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'file' }
 function downloadAll() {
   for (const item of extracted.value) {
@@ -103,9 +115,10 @@ onUnmounted(revokeResults)
     </template>
 
     <template v-if="mode === 'extract' && zipFile">
-      <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 p-4 dark:bg-slate-800"><span><strong class="block">{{ zipFile.name }}</strong><span class="text-xs text-slate-400">{{ formatFileSize(zipFile.size) }} · {{ fileEntryCount }} file</span></span><button type="button" class="text-sm font-bold text-rose-600" @click="zipFile = null; zipEntries = []; revokeResults()">Hapus</button></div>
-      <div v-if="zipEntries.length" class="mt-4 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700"><ul class="max-h-80 divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800"><li v-for="entry in zipEntries" :key="`${entry.index}-${entry.name}`" class="flex items-center gap-3 px-4 py-3 text-sm"><Icon :icon="entry.directory ? 'mdi:folder-outline' : 'mdi:file-outline'" class="size-5 shrink-0 text-indigo-500" /><span class="min-w-0 flex-1 truncate" :title="entry.name">{{ entry.name }}</span><span v-if="!entry.directory" class="text-xs text-slate-400">{{ formatFileSize(entry.uncompressedSize) }}</span><a v-if="extractedUrl(entry.index)" :href="extractedUrl(entry.index)" :download="safeDownloadName(entry.name)" class="text-indigo-600" aria-label="Download file"><Icon icon="mdi:download" class="size-5" /></a></li></ul></div>
-      <button v-if="!extracted.length" type="button" class="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 font-bold text-white hover:bg-indigo-700 disabled:opacity-50" :disabled="isProcessing || !fileEntryCount" @click="extractArchive"><Icon :icon="isProcessing ? 'mdi:loading' : 'mdi:archive-arrow-down-outline'" class="size-5" :class="{ 'animate-spin': isProcessing }" />{{ isProcessing ? `Mengekstrak ${Math.round(progress * 100)}%` : 'Ekstrak semua file' }}</button><button v-else type="button" class="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 font-bold text-white hover:bg-emerald-700" @click="downloadAll"><Icon icon="mdi:download-multiple" class="size-5" />Download semua hasil</button>
+      <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 p-4 dark:bg-slate-800"><span><strong class="block">{{ zipFile.name }}</strong><span class="text-xs text-slate-400">{{ formatFileSize(zipFile.size) }} · {{ fileEntryCount }} file</span></span><button type="button" class="text-sm font-bold text-rose-600" @click="zipFile = null; zipEntries = []; selectedEntryIndices = []; revokeResults()">Hapus</button></div>
+      <div v-if="zipEntries.length" class="mt-4 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700"><div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs dark:border-slate-700 dark:bg-slate-800"><span class="font-bold">{{ selectedEntryIndices.length }} dipilih · {{ formatFileSize(selectedSize) }}</span><span class="flex gap-3"><button type="button" class="font-bold text-indigo-600" @click="selectSafeEntries">Pilih aman</button><button type="button" class="font-bold text-slate-500" @click="selectedEntryIndices = []">Kosongkan</button></span></div><ul class="max-h-80 divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800"><li v-for="entry in zipEntries" :key="`${entry.index}-${entry.name}`" class="flex items-center gap-3 px-4 py-3 text-sm" :class="entry.safetyIssue ? 'bg-rose-50 dark:bg-rose-500/10' : ''"><input v-if="!entry.directory" v-model="selectedEntryIndices" type="checkbox" :value="entry.index" :disabled="!!entry.safetyIssue || !!extracted.length" class="size-4 shrink-0 accent-indigo-600" :aria-label="`Pilih ${entry.name}`" /><span v-else class="size-4"></span><Icon :icon="entry.directory ? 'mdi:folder-outline' : entry.safetyIssue ? 'mdi:alert-outline' : 'mdi:file-outline'" class="size-5 shrink-0" :class="entry.safetyIssue ? 'text-rose-600' : 'text-indigo-500'" /><span class="min-w-0 flex-1"><span class="block truncate" :title="entry.name">{{ entry.name }}</span><span v-if="entry.safetyIssue" class="block text-xs font-semibold text-rose-600 dark:text-rose-300">{{ entry.safetyIssue }}</span></span><span v-if="!entry.directory" class="text-xs text-slate-400">{{ formatFileSize(entry.uncompressedSize) }}</span><a v-if="extractedUrl(entry.index)" :href="extractedUrl(entry.index)" :download="safeDownloadName(entry.name)" class="text-indigo-600" aria-label="Download file"><Icon icon="mdi:download" class="size-5" /></a></li></ul></div>
+      <p v-if="zipEntries.length" class="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">Proteksi aktif: maksimal 2.000 entry per ZIP, 250 file dan 512 MB per ekstraksi, 256 MB per entry, serta rasio kompresi maksimal 200×.</p>
+      <button v-if="!extracted.length" type="button" class="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 font-bold text-white hover:bg-indigo-700 disabled:opacity-50" :disabled="isProcessing || !selectedEntryIndices.length" @click="extractArchive"><Icon :icon="isProcessing ? 'mdi:loading' : 'mdi:archive-arrow-down-outline'" class="size-5" :class="{ 'animate-spin': isProcessing }" />{{ isProcessing ? `Mengekstrak ${Math.round(progress * 100)}%` : `Ekstrak ${selectedEntryIndices.length} file terpilih` }}</button><button v-else type="button" class="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 font-bold text-white hover:bg-emerald-700" @click="downloadAll"><Icon icon="mdi:download-multiple" class="size-5" />Download semua hasil</button>
     </template>
     <p v-if="errorMessage" role="alert" class="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">{{ errorMessage }}</p>
   </ToolPageShell>

@@ -1,12 +1,15 @@
 import imageCompression from 'browser-image-compression'
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { useImageBatchQueue } from '@/composables/image/useImageBatchQueue'
 
 export const maxCompressImageFiles = 100
 export const defaultCompressQuality = 75
+export const defaultCompressTargetSizeMb = 1
 export const maxCompressImagePixels = 40_000_000
 const maxCompressImageFileSize = 25 * 1024 * 1024
 
 export type CompressImageStatus = 'queued' | 'processing' | 'completed' | 'error'
+export type CompressionMode = 'quality' | 'target-size'
 
 export interface CompressImageItem {
   id: string
@@ -136,25 +139,43 @@ function canvasToFile(
   })
 }
 
+export function buildCompressionOptions(
+  sourceSize: number,
+  outputMimeType: CompressImageItem['outputMimeType'],
+  selectedQuality: number,
+  mode: CompressionMode,
+  selectedTargetSizeMb: number,
+  signal?: AbortSignal,
+) {
+  const sourceSizeMb = Math.max(0.01, sourceSize / (1024 * 1024))
+  const targetSizeMb = mode === 'target-size'
+    ? Math.min(sourceSizeMb, Math.max(0.01, selectedTargetSizeMb))
+    : Math.max(0.01, sourceSizeMb * 0.999)
+
+  return {
+    maxSizeMB: targetSizeMb,
+    initialQuality: mode === 'quality' ? selectedQuality / 100 : 0.92,
+    alwaysKeepResolution: mode === 'quality',
+    fileType: outputMimeType,
+    maxIteration: mode === 'quality' ? 1 : 10,
+    useWebWorker: true,
+    preserveExif: false,
+    signal,
+  }
+}
+
 export function useImageCompressor() {
   const items = ref<CompressImageItem[]>([])
   const quality = ref(defaultCompressQuality)
+  const compressionMode = ref<CompressionMode>('quality')
+  const targetSizeMb = ref(defaultCompressTargetSizeMb)
   const isProcessing = ref(false)
   const isDragging = ref(false)
   const errorMessage = ref('')
   let itemSequence = 0
+  let processingController: AbortController | null = null
 
-  const completedCount = computed(
-    () => items.value.filter((item) => item.status === 'completed').length,
-  )
-  const failedCount = computed(() => items.value.filter((item) => item.status === 'error').length)
-  const processedCount = computed(() => completedCount.value + failedCount.value)
-  const progressPercentage = computed(() =>
-    items.value.length === 0 ? 0 : Math.round((processedCount.value / items.value.length) * 100),
-  )
-  const hasProcessableItems = computed(() =>
-    items.value.some((item) => item.status === 'queued' || item.status === 'error'),
-  )
+  const { completedCount, failedCount, processedCount, progressPercentage, hasProcessableItems } = useImageBatchQueue(items)
 
   function revokeUrl(url: string) {
     if (url) URL.revokeObjectURL(url)
@@ -170,20 +191,27 @@ export function useImageCompressor() {
     source: File,
     outputMimeType: CompressImageItem['outputMimeType'],
     selectedQuality: number,
+    mode: CompressionMode,
+    selectedTargetSizeMb: number,
+    signal?: AbortSignal,
   ) {
-    const targetSizeMb = Math.max(0.01, (source.size / (1024 * 1024)) * (selectedQuality / 100))
-    return imageCompression(source, {
-      maxSizeMB: targetSizeMb,
-      initialQuality: selectedQuality / 100,
-      alwaysKeepResolution: true,
-      fileType: outputMimeType,
-      maxIteration: 10,
-      useWebWorker: false,
-      preserveExif: false,
-    })
+    return imageCompression(source, buildCompressionOptions(
+      source.size,
+      outputMimeType,
+      selectedQuality,
+      mode,
+      selectedTargetSizeMb,
+      signal,
+    ))
   }
 
-  async function processItem(item: CompressImageItem, selectedQuality: number) {
+  async function processItem(
+    item: CompressImageItem,
+    selectedQuality: number,
+    mode: CompressionMode,
+    selectedTargetSizeMb: number,
+    signal: AbortSignal,
+  ) {
     clearOutput(item)
     item.status = 'processing'
     item.errorMessage = ''
@@ -193,13 +221,20 @@ export function useImageCompressor() {
       bitmap = await createImageBitmap(item.file)
       const dimensionError = validateCompressImageDimensions(bitmap.width, bitmap.height)
       if (dimensionError) throw new Error(dimensionError)
-      const output = await compressFile(item.file, item.outputMimeType, selectedQuality)
+      const output = await compressFile(
+        item.file,
+        item.outputMimeType,
+        selectedQuality,
+        mode,
+        selectedTargetSizeMb,
+        signal,
+      )
       item.outputBlob = output
       item.outputPreviewUrl = URL.createObjectURL(output)
       item.cropShape = null
       item.status = 'completed'
     } catch (error) {
-      item.status = 'error'
+      item.status = signal.aborted ? 'queued' : 'error'
       item.errorMessage = error instanceof Error ? error.message : 'Gambar tidak dapat dikompres.'
     } finally {
       bitmap?.close()
@@ -211,15 +246,21 @@ export function useImageCompressor() {
     isProcessing.value = true
     errorMessage.value = ''
     const selectedQuality = quality.value
+    const selectedMode = compressionMode.value
+    const selectedTargetSizeMb = targetSizeMb.value
+    const controller = new AbortController()
+    processingController = controller
     const queue = items.value.filter(
       (item) => item.status === 'queued' || item.status === 'error',
     )
     try {
       for (const item of queue) {
-        await processItem(item, selectedQuality)
+        if (controller.signal.aborted) break
+        await processItem(item, selectedQuality, selectedMode, selectedTargetSizeMb, controller.signal)
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
       }
     } finally {
+      processingController = null
       isProcessing.value = false
     }
   }
@@ -269,6 +310,8 @@ export function useImageCompressor() {
     item.status = 'processing'
     item.errorMessage = ''
     isProcessing.value = true
+    const controller = new AbortController()
+    processingController = controller
     try {
       const outputMimeType = shape === 'circle' ? 'image/png' : (getImageMimeType(item.file) ?? 'image/png')
       const extension = extensionForMimeType(outputMimeType)
@@ -278,7 +321,14 @@ export function useImageCompressor() {
         outputMimeType,
         quality.value,
       )
-      const output = await compressFile(sourceFile, outputMimeType, quality.value)
+      const output = await compressFile(
+        sourceFile,
+        outputMimeType,
+        quality.value,
+        compressionMode.value,
+        targetSizeMb.value,
+        controller.signal,
+      )
       clearOutput(item)
       item.outputBlob = output
       item.outputPreviewUrl = URL.createObjectURL(output)
@@ -292,8 +342,13 @@ export function useImageCompressor() {
       item.errorMessage = error instanceof Error ? error.message : 'Hasil crop tidak dapat dikompres.'
       return false
     } finally {
+      processingController = null
       isProcessing.value = false
     }
+  }
+
+  function cancelProcessing() {
+    processingController?.abort()
   }
 
   function removeItem(id: string) {
@@ -317,6 +372,7 @@ export function useImageCompressor() {
   }
 
   onBeforeUnmount(() => {
+    processingController?.abort()
     for (const item of items.value) {
       revokeUrl(item.inputPreviewUrl)
       revokeUrl(item.outputPreviewUrl)
@@ -326,6 +382,8 @@ export function useImageCompressor() {
   return {
     items,
     quality,
+    compressionMode,
+    targetSizeMb,
     isProcessing,
     isDragging,
     errorMessage,
@@ -336,6 +394,7 @@ export function useImageCompressor() {
     hasProcessableItems,
     addFiles,
     processAll,
+    cancelProcessing,
     applyCrop,
     removeItem,
     reset,

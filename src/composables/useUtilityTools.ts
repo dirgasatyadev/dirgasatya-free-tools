@@ -219,53 +219,97 @@ export function analyzeText(value: string) {
   }
 }
 
-function csvCell(value: unknown) {
+export type CsvDelimiter = ',' | ';' | '\t' | '|'
+export interface CsvOptions {
+  delimiter?: CsvDelimiter
+  includeBom?: boolean
+  includeHeader?: boolean
+  hasHeader?: boolean
+  strict?: boolean
+  inferTypes?: boolean
+}
+
+function csvCell(value: unknown, delimiter: CsvDelimiter) {
   const stringValue = value === null || value === undefined
     ? ''
     : typeof value === 'object' ? JSON.stringify(value) : String(value)
-  return /[",\r\n]/u.test(stringValue) ? `"${stringValue.replace(/"/g, '""')}"` : stringValue
+  return stringValue.includes(delimiter) || /["\r\n]/u.test(stringValue) ? `"${stringValue.replace(/"/g, '""')}"` : stringValue
 }
 
-export function jsonToCsv(value: string) {
+function parseJsonRows(value: string, jsonLines = false) {
   let parsed: unknown
   try {
-    parsed = JSON.parse(value)
+    parsed = jsonLines
+      ? value.replace(/^\uFEFF/u, '').split(/\r?\n/u).filter((line) => line.trim()).map((line) => JSON.parse(line))
+      : JSON.parse(value.replace(/^\uFEFF/u, ''))
   } catch {
-    throw new Error('JSON tidak valid.')
+    throw new Error(jsonLines ? 'JSON Lines tidak valid.' : 'JSON tidak valid.')
   }
   const rows = Array.isArray(parsed) ? parsed : [parsed]
-  if (rows.length === 0) return ''
+  if (rows.length === 0) return []
   if (rows.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) {
-    throw new Error('JSON harus berupa object atau array berisi object.')
+    throw new Error(`${jsonLines ? 'JSON Lines' : 'JSON'} harus berisi object.`)
   }
-  const objects = rows as Record<string, unknown>[]
-  const headers = Array.from(new Set(objects.flatMap((row) => Object.keys(row))))
-  return [headers.map(csvCell).join(','), ...objects.map((row) => headers.map((key) => csvCell(row[key])).join(','))].join('\n')
+  return rows as Record<string, unknown>[]
 }
 
-export function parseCsv(value: string) {
+export function jsonToCsv(value: string, options: CsvOptions = {}) {
+  const objects = parseJsonRows(value)
+  if (!objects.length) return ''
+  const delimiter = options.delimiter ?? ','
+  const headers = Array.from(new Set(objects.flatMap((row) => Object.keys(row))))
+  const rows = [
+    ...(options.includeHeader === false ? [] : [headers.map((cell) => csvCell(cell, delimiter)).join(delimiter)]),
+    ...objects.map((row) => headers.map((key) => csvCell(row[key], delimiter)).join(delimiter)),
+  ]
+  return `${options.includeBom ? '\uFEFF' : ''}${rows.join('\n')}`
+}
+
+export function detectCsvDelimiter(value: string): CsvDelimiter {
+  const candidates: CsvDelimiter[] = [',', ';', '\t', '|']
+  const counts = new Map(candidates.map((delimiter) => [delimiter, 0]))
+  let quoted = false
+  for (const character of value.replace(/^\uFEFF/u, '')) {
+    if (character === '"') quoted = !quoted
+    else if (!quoted && character === '\n') break
+    else if (!quoted && counts.has(character as CsvDelimiter)) counts.set(character as CsvDelimiter, counts.get(character as CsvDelimiter)! + 1)
+  }
+  return candidates.reduce((best, candidate) => counts.get(candidate)! > counts.get(best)! ? candidate : best, ',')
+}
+
+export function parseCsv(value: string, delimiter: CsvDelimiter = ',', strict = true) {
   const rows: string[][] = []
   let row: string[] = []
   let cell = ''
   let quoted = false
-  for (let index = 0; index < value.length; index += 1) {
-    const character = value[index]
+  const normalizedValue = value.replace(/^\uFEFF/u, '')
+  let justClosedQuote = false
+  for (let index = 0; index < normalizedValue.length; index += 1) {
+    const character = normalizedValue[index]
     if (quoted) {
-      if (character === '"' && value[index + 1] === '"') {
+      if (character === '"' && normalizedValue[index + 1] === '"') {
         cell += '"'
         index += 1
-      } else if (character === '"') quoted = false
+      } else if (character === '"') { quoted = false; justClosedQuote = true }
       else cell += character
-    } else if (character === '"') quoted = true
-    else if (character === ',') {
+    } else if (character === '"') {
+      if (strict && cell.length > 0) throw new Error(`CSV tidak valid: tanda kutip harus berada di awal cell (karakter ${index + 1}).`)
+      quoted = true
+    } else if (character === delimiter) {
       row.push(cell)
       cell = ''
+      justClosedQuote = false
     } else if (character === '\n') {
       row.push(cell.replace(/\r$/u, ''))
       rows.push(row)
       row = []
       cell = ''
-    } else cell += character
+      justClosedQuote = false
+    } else if (character === '\r' && normalizedValue[index + 1] === '\n') continue
+    else {
+      if (strict && justClosedQuote && !/\s/u.test(character!)) throw new Error(`CSV tidak valid: karakter setelah penutup kutip pada posisi ${index + 1}.`)
+      cell += character
+    }
   }
   if (quoted) throw new Error('CSV tidak valid: tanda kutip belum ditutup.')
   if (cell || row.length) {
@@ -275,16 +319,136 @@ export function parseCsv(value: string) {
   return rows
 }
 
-export function csvToJson(value: string) {
-  const rows = parseCsv(value)
-  const [headers, ...dataRows] = rows
+export async function* parseCsvStream(source: Blob, delimiter: CsvDelimiter = ',', strict = true): AsyncGenerator<string[]> {
+  const reader = source.stream().getReader()
+  const decoder = new TextDecoder()
+  let row: string[] = []
+  let cell = ''
+  let quoted = false
+  let justClosedQuote = false
+  let position = 0
+  let isFirstCharacter = true
+
+  const consume = function* (chunk: string) {
+    for (let index = 0; index < chunk.length; index += 1) {
+      const character = chunk[index]!
+      position += 1
+      if (isFirstCharacter) {
+        isFirstCharacter = false
+        if (character === '\uFEFF') continue
+      }
+      if (quoted) {
+        if (character === '"') {
+          quoted = false
+          justClosedQuote = true
+        } else cell += character
+      } else if (character === '"') {
+        if (justClosedQuote) {
+          cell += '"'
+          quoted = true
+          justClosedQuote = false
+        } else {
+          if (strict && cell.length > 0) throw new Error(`CSV tidak valid: tanda kutip harus berada di awal cell (karakter ${position}).`)
+          quoted = true
+        }
+      } else if (character === delimiter) {
+        row.push(cell)
+        cell = ''
+        justClosedQuote = false
+      } else if (character === '\n') {
+        row.push(cell.replace(/\r$/u, ''))
+        yield row
+        row = []
+        cell = ''
+        justClosedQuote = false
+      } else {
+        if (strict && justClosedQuote && !/\s/u.test(character)) throw new Error(`CSV tidak valid: karakter setelah penutup kutip pada posisi ${position}.`)
+        cell += character
+      }
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    const chunk = decoder.decode(value, { stream: !done })
+    for (const parsedRow of consume(chunk)) yield parsedRow
+    if (done) break
+  }
+  if (quoted) throw new Error('CSV tidak valid: tanda kutip belum ditutup.')
+  if (cell || row.length) {
+    row.push(cell.replace(/\r$/u, ''))
+    yield row
+  }
+}
+
+function inferCsvCell(value: string) {
+  const trimmed = value.trim()
+  if (trimmed === '') return ''
+  if (/^(?:true|false)$/i.test(trimmed)) return trimmed.toLocaleLowerCase('en') === 'true'
+  if (/^null$/i.test(trimmed)) return null
+  if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(trimmed) && !/^[-+]?0\d/u.test(trimmed)) {
+    const number = Number(trimmed)
+    if (Number.isFinite(number)) return number
+  }
+  return value
+}
+
+export function csvToObjects(value: string, options: CsvOptions = {}) {
+  const delimiter = options.delimiter ?? detectCsvDelimiter(value)
+  const rows = parseCsv(value, delimiter, options.strict !== false)
+  const hasHeader = options.hasHeader !== false
+  const firstRow = rows[0]
+  const headers = hasHeader ? firstRow : firstRow?.map((_, index) => `column_${index + 1}`)
+  const dataRows = hasHeader ? rows.slice(1) : rows
   if (!headers?.length || headers.every((header) => !header.trim())) throw new Error('Header CSV wajib diisi.')
   const normalizedHeaders = headers.map((header) => header.trim())
   if (new Set(normalizedHeaders).size !== normalizedHeaders.length) throw new Error('Header CSV tidak boleh duplikat.')
-  const result = dataRows
-    .filter((row) => row.some((cell) => cell !== ''))
-    .map((row) => Object.fromEntries(normalizedHeaders.map((header, index) => [header, row[index] ?? ''])))
-  return JSON.stringify(result, null, 2)
+  return dataRows.filter((row) => row.some((cell) => cell !== '')).map((row, rowIndex) => {
+    if (options.strict !== false && row.length !== normalizedHeaders.length) throw new Error(`CSV row ${rowIndex + (hasHeader ? 2 : 1)} memiliki ${row.length} kolom; seharusnya ${normalizedHeaders.length}.`)
+    return Object.fromEntries(normalizedHeaders.map((header, index) => [header, options.inferTypes ? inferCsvCell(row[index] ?? '') : row[index] ?? '']))
+  })
+}
+
+export async function csvBlobToJson(source: Blob, options: CsvOptions = {}, jsonLines = false) {
+  const delimiter = options.delimiter ?? detectCsvDelimiter(await source.slice(0, 64 * 1024).text())
+  const rows = parseCsvStream(source, delimiter, options.strict !== false)
+  const first = await rows.next()
+  if (first.done) return jsonLines ? '' : '[]'
+  const hasHeader = options.hasHeader !== false
+  const headers = (hasHeader ? first.value : first.value.map((_, index) => `column_${index + 1}`)).map((header) => header.trim())
+  if (!headers.length || headers.every((header) => !header)) throw new Error('Header CSV wajib diisi.')
+  if (new Set(headers).size !== headers.length) throw new Error('Header CSV tidak boleh duplikat.')
+  const output: string[] = []
+  let rowNumber = hasHeader ? 2 : 1
+
+  const appendRow = (row: string[]) => {
+    if (!row.some((cellValue) => cellValue !== '')) return
+    if (options.strict !== false && row.length !== headers.length) throw new Error(`CSV row ${rowNumber} memiliki ${row.length} kolom; seharusnya ${headers.length}.`)
+    const record = Object.fromEntries(headers.map((header, index) => [header, options.inferTypes ? inferCsvCell(row[index] ?? '') : row[index] ?? '']))
+    output.push(JSON.stringify(record))
+  }
+  if (!hasHeader) {
+    appendRow(first.value)
+    rowNumber += 1
+  }
+  for await (const row of rows) {
+    appendRow(row)
+    rowNumber += 1
+  }
+  return jsonLines ? output.join('\n') : `[\n${output.map((line) => `  ${line}`).join(',\n')}\n]`
+}
+
+export function csvToJson(value: string, options: CsvOptions = {}) {
+  return JSON.stringify(csvToObjects(value, options), null, 2)
+}
+
+export function jsonLinesToCsv(value: string, options: CsvOptions = {}) {
+  const rows = parseJsonRows(value, true)
+  return jsonToCsv(JSON.stringify(rows), options)
+}
+
+export function csvToJsonLines(value: string, options: CsvOptions = {}) {
+  return csvToObjects(value, options).map((row) => JSON.stringify(row)).join('\n')
 }
 
 export interface MetaTagConfig {

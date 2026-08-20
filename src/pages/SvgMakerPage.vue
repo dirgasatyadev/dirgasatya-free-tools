@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import SiteHeader from '@/components/SiteHeader.vue'
+import SvgLayerPanel from '@/components/svg/SvgLayerPanel.vue'
+import SvgToolbar from '@/components/svg/SvgToolbar.vue'
+import SvgCanvas from '@/components/svg/SvgCanvas.vue'
+import { useSvgPointer } from '@/composables/svg/useSvgPointer'
+import { useSvgSelection } from '@/composables/svg/useSvgSelection'
+import { useSvgHistory } from '@/composables/svg/useSvgHistory'
 import {
-  buildSvgPathData,
   clampSvgDimension,
-  getEditableShapeNodes,
   normalizeSvgFileName,
   svgMakerElementLabels,
   updateEditableShapeNode,
   useSvgMaker,
-  type SvgElementType,
   type SvgMakerElement,
   type SvgPathNode,
 } from '@/composables/useSvgMaker'
@@ -24,14 +27,14 @@ const {
   selectedId,
   selectedElement,
   svgCode,
-  addElement,
-  addPathPreset,
-  addPathNode,
-  deletePathNode,
-  deleteSelected,
-  duplicateSelected,
-  moveLayer,
-  reset,
+  addElement: addElementBase,
+  addPathPreset: addPathPresetBase,
+  addPathNode: addPathNodeBase,
+  deletePathNode: deletePathNodeBase,
+  deleteSelected: deleteSelectedBase,
+  duplicateSelected: duplicateSelectedBase,
+  moveLayer: moveLayerBase,
+  reset: resetBase,
 } = useSvgMaker()
 
 const fileName = ref('design')
@@ -39,24 +42,30 @@ const copyLabel = ref('Salin kode SVG')
 const showCode = ref(false)
 const showResetConfirmation = ref(false)
 const svgCanvas = ref<SVGSVGElement | null>(null)
-const selectedNodeId = ref<string | null>(null)
 const nodeAddMode = ref(false)
 const showGrid = ref(true)
 const snapToGrid = ref(false)
 const gridSize = ref(20)
 const zoom = ref(100)
 let copyTimer = 0
+const { selectedNodeId, editableNodes, selectedNode } = useSvgSelection(selectedElement)
+const { snapValue, canvasCoordinates } = useSvgPointer({ canvas: svgCanvas, width, height, snapToGrid, gridSize })
+const history = useSvgHistory(
+  () => ({ width: width.value, height: height.value, background: background.value, transparentBackground: transparentBackground.value, elements: structuredClone(elements.value), selectedId: selectedId.value }),
+  (snapshot) => { width.value = snapshot.width; height.value = snapshot.height; background.value = snapshot.background; transparentBackground.value = snapshot.transparentBackground; elements.value = snapshot.elements; selectedId.value = snapshot.selectedId },
+)
+
+function addElement(type: Parameters<typeof addElementBase>[0]) { history.checkpoint(); addElementBase(type) }
+function addPathPreset(preset: Parameters<typeof addPathPresetBase>[0]) { history.checkpoint(); addPathPresetBase(preset) }
+function deleteSelected() { history.checkpoint(); deleteSelectedBase() }
+function duplicateSelected() { history.checkpoint(); duplicateSelectedBase() }
+function moveLayer(direction: 'up' | 'down') { history.checkpoint(); moveLayerBase(direction) }
+function reset() { history.checkpoint(); resetBase() }
 
 const canvasStyle = computed(() => ({
   aspectRatio: `${width.value} / ${height.value}`,
   width: `${zoom.value}%`,
 }))
-const editableNodes = computed(() =>
-  selectedElement.value ? getEditableShapeNodes(selectedElement.value) : [],
-)
-const selectedNode = computed(
-  () => editableNodes.value.find((node) => node.id === selectedNodeId.value) ?? null,
-)
 const selectedNodeX = computed({
   get: () => selectedNode.value?.x ?? 0,
   set: (value: number) => updateSelectedNodeCoordinate(value, selectedNode.value?.y ?? 0),
@@ -65,13 +74,6 @@ const selectedNodeY = computed({
   get: () => selectedNode.value?.y ?? 0,
   set: (value: number) => updateSelectedNodeCoordinate(selectedNode.value?.x ?? 0, value),
 })
-const shapeTools: { type: SvgElementType; icon: string; label: string }[] = [
-  { type: 'rectangle', icon: 'mdi:rectangle-outline', label: 'Kotak' },
-  { type: 'circle', icon: 'mdi:circle-outline', label: 'Lingkaran' },
-  { type: 'ellipse', icon: 'mdi:ellipse-outline', label: 'Elips' },
-  { type: 'line', icon: 'mdi:vector-line', label: 'Garis' },
-  { type: 'text', icon: 'mdi:format-text', label: 'Teks' },
-]
 
 function clampCanvasSize() {
   width.value = clampSvgDimension(width.value)
@@ -116,6 +118,7 @@ let dragState: DragState | null = null
 
 function beginDrag(event: PointerEvent, element: SvgMakerElement) {
   if (event.button !== 0) return
+  history.checkpoint()
   selectedId.value = element.id
   if (element.type !== 'path') {
     selectedNodeId.value = null
@@ -161,32 +164,10 @@ function endDrag() {
   window.removeEventListener('pointermove', moveDraggedElement)
 }
 
-function selectLayer(element: SvgMakerElement) {
-  selectedId.value = element.id
+function selectLayer(id: string) {
+  selectedId.value = id
   selectedNodeId.value = null
   nodeAddMode.value = false
-}
-
-function elementIcon(type: SvgElementType) {
-  if (type === 'path') return 'mdi:vector-polyline'
-  return shapeTools.find((tool) => tool.type === type)?.icon ?? 'mdi:shape-outline'
-}
-
-function snapValue(value: number) {
-  if (!snapToGrid.value) return Math.round(value)
-  const safeGridSize = Math.max(1, gridSize.value)
-  return Math.round(value / safeGridSize) * safeGridSize
-}
-
-function canvasCoordinates(event: PointerEvent) {
-  const canvas = svgCanvas.value
-  if (!canvas) return null
-  const bounds = canvas.getBoundingClientRect()
-  if (bounds.width <= 0 || bounds.height <= 0) return null
-  return {
-    x: snapValue(((event.clientX - bounds.left) / bounds.width) * width.value),
-    y: snapValue(((event.clientY - bounds.top) / bounds.height) * height.value),
-  }
 }
 
 function handleCanvasPointerDown(event: PointerEvent) {
@@ -194,7 +175,8 @@ function handleCanvasPointerDown(event: PointerEvent) {
   if (nodeAddMode.value && element?.type === 'path') {
     const coordinates = canvasCoordinates(event)
     if (!coordinates) return
-    const node = addPathNode(element.id, coordinates.x, coordinates.y)
+    history.checkpoint()
+    const node = addPathNodeBase(element.id, coordinates.x, coordinates.y)
     selectedNodeId.value = node?.id ?? null
     return
   }
@@ -214,6 +196,7 @@ interface NodeDragState {
 let nodeDragState: NodeDragState | null = null
 
 function beginNodeDrag(event: PointerEvent, element: SvgMakerElement, node: SvgPathNode) {
+  history.checkpoint()
   selectedNodeId.value = node.id
   nodeDragState = {
     element,
@@ -252,7 +235,8 @@ function endNodeDrag() {
 function removeSelectedNode() {
   const element = selectedElement.value
   if (!element || element.type !== 'path' || !selectedNodeId.value) return
-  deletePathNode(element.id, selectedNodeId.value)
+  history.checkpoint()
+  deletePathNodeBase(element.id, selectedNodeId.value)
   selectedNodeId.value = null
 }
 
@@ -262,12 +246,29 @@ function updateSelectedNodeCoordinate(x: number, y: number) {
   updateEditableShapeNode(element, selectedNodeId.value, snapValue(x), snapValue(y))
 }
 
+function handleEditorShortcut(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null
+  if (target?.matches('input, textarea, select, [contenteditable="true"]')) return
+  if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase('en') === 'z') {
+    event.preventDefault()
+    if (event.shiftKey) history.redo()
+    else history.undo()
+  } else if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase('en') === 'd') {
+    event.preventDefault(); duplicateSelected()
+  } else if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault(); deleteSelected()
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', handleEditorShortcut))
+
 onBeforeUnmount(() => {
   window.clearTimeout(copyTimer)
   window.removeEventListener('pointermove', moveDraggedElement)
   window.removeEventListener('pointerup', endDrag)
   window.removeEventListener('pointermove', moveDraggedNode)
   window.removeEventListener('pointerup', endNodeDrag)
+  window.removeEventListener('keydown', handleEditorShortcut)
 })
 </script>
 
@@ -290,29 +291,14 @@ onBeforeUnmount(() => {
 
       <div class="mt-8 grid gap-5 xl:grid-cols-[17rem_minmax(0,1fr)_20rem]">
         <aside class="space-y-5">
-          <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 class="flex items-center gap-2 font-black text-slate-950 dark:text-white"><Icon icon="mdi:shape-plus-outline" class="size-5 text-fuchsia-600" /> Tambah elemen</h2>
-            <div class="mt-4 grid grid-cols-2 gap-2">
-              <button v-for="tool in shapeTools" :key="tool.type" type="button" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 transition hover:border-fuchsia-300 hover:bg-fuchsia-50 hover:text-fuchsia-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-fuchsia-500/50 dark:hover:bg-fuchsia-500/10 dark:hover:text-fuchsia-300" @click="addElement(tool.type)"><Icon :icon="tool.icon" class="size-5" /> {{ tool.label }}</button>
-              <button type="button" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 transition hover:border-fuchsia-300 hover:bg-fuchsia-50 hover:text-fuchsia-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-fuchsia-500/50 dark:hover:bg-fuchsia-500/10 dark:hover:text-fuchsia-300" @click="addPathPreset('path')"><Icon icon="mdi:vector-polyline-plus" class="size-5" /> Path</button>
-              <button type="button" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 transition hover:border-fuchsia-300 hover:bg-fuchsia-50 hover:text-fuchsia-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-fuchsia-500/50 dark:hover:bg-fuchsia-500/10 dark:hover:text-fuchsia-300" @click="addPathPreset('polygon')"><Icon icon="mdi:hexagon-outline" class="size-5" /> Polygon</button>
-              <button type="button" class="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 transition hover:border-fuchsia-300 hover:bg-fuchsia-50 hover:text-fuchsia-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-fuchsia-500/50 dark:hover:bg-fuchsia-500/10 dark:hover:text-fuchsia-300" @click="addPathPreset('star')"><Icon icon="mdi:star-outline" class="size-5" /> Bintang dengan node</button>
-            </div>
-          </section>
-
-          <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div class="flex items-center justify-between"><h2 class="flex items-center gap-2 font-black text-slate-950 dark:text-white"><Icon icon="mdi:layers-outline" class="size-5 text-fuchsia-600" /> Layer</h2><span class="text-xs font-bold text-slate-400">{{ elements.length }}</span></div>
-            <div v-if="elements.length" class="mt-4 max-h-72 space-y-2 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <button v-for="(element, index) in [...elements].reverse()" :key="element.id" type="button" class="flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition" :class="selectedId === element.id ? 'border-fuchsia-500 bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-300' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'" @click="selectLayer(element)"><Icon :icon="elementIcon(element.type)" class="size-5 shrink-0" /><span class="min-w-0 flex-1 truncate text-sm font-bold">{{ element.type === 'text' ? element.text : svgMakerElementLabels[element.type] }}</span><span class="text-[10px] font-black opacity-50">{{ elements.length - index }}</span></button>
-            </div>
-            <div v-else class="mt-4 rounded-2xl bg-slate-50 p-4 text-center text-sm font-semibold text-slate-400 dark:bg-slate-950">Belum ada layer.</div>
-            <div class="mt-3 grid grid-cols-4 gap-2"><button type="button" class="grid min-h-10 place-items-center rounded-xl bg-slate-100 text-slate-600 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300" :disabled="!selectedElement" title="Naikkan layer" aria-label="Naikkan layer" @click="moveLayer('up')"><Icon icon="mdi:arrow-up" class="size-5" /></button><button type="button" class="grid min-h-10 place-items-center rounded-xl bg-slate-100 text-slate-600 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300" :disabled="!selectedElement" title="Turunkan layer" aria-label="Turunkan layer" @click="moveLayer('down')"><Icon icon="mdi:arrow-down" class="size-5" /></button><button type="button" class="grid min-h-10 place-items-center rounded-xl bg-slate-100 text-slate-600 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300" :disabled="!selectedElement" title="Duplikat layer" aria-label="Duplikat layer" @click="duplicateSelected"><Icon icon="mdi:content-copy" class="size-5" /></button><button type="button" class="grid min-h-10 place-items-center rounded-xl bg-rose-50 text-rose-600 disabled:opacity-40 dark:bg-rose-500/10 dark:text-rose-300" :disabled="!selectedElement" title="Hapus layer" aria-label="Hapus layer" @click="deleteSelected"><Icon icon="mdi:trash-can-outline" class="size-5" /></button></div>
-          </section>
+          <SvgToolbar @add-element="addElement" @add-path="addPathPreset" />
+          <SvgLayerPanel :elements="elements" :selected-id="selectedId" @select="selectLayer" @move="moveLayer" @duplicate="duplicateSelected" @delete="deleteSelected" />
         </aside>
 
         <section class="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="font-black text-slate-950 dark:text-white">Kanvas</h2><p class="mt-1 text-xs font-semibold text-slate-500">Klik dan tarik elemen atau node untuk memindahkannya.</p></div><div class="flex items-center gap-2 text-xs font-bold text-slate-500"><span>{{ width }} × {{ height }}</span><span>·</span><span>{{ elements.length }} elemen</span></div></div>
           <div class="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 p-3 dark:border-slate-700">
+            <button type="button" class="grid size-9 place-items-center rounded-lg bg-slate-100 disabled:opacity-40 dark:bg-slate-800" :disabled="!history.canUndo.value" aria-label="Undo" title="Undo" @click="history.undo"><Icon icon="mdi:undo" class="size-4" /></button><button type="button" class="grid size-9 place-items-center rounded-lg bg-slate-100 disabled:opacity-40 dark:bg-slate-800" :disabled="!history.canRedo.value" aria-label="Redo" title="Redo" @click="history.redo"><Icon icon="mdi:redo" class="size-4" /></button>
             <button type="button" class="inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-xs font-bold transition" :class="showGrid ? 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'" :aria-pressed="showGrid" @click="showGrid = !showGrid"><Icon icon="mdi:grid" class="size-4" /> Grid</button>
             <button type="button" class="inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-xs font-bold transition" :class="snapToGrid ? 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'" :aria-pressed="snapToGrid" @click="snapToGrid = !snapToGrid"><Icon icon="mdi:magnet-on" class="size-4" /> Snap</button>
             <label class="inline-flex items-center gap-2 text-xs font-bold text-slate-500">Grid <input v-model.number="gridSize" type="number" min="5" max="100" class="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white" /></label>
@@ -320,22 +306,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="mt-5 grid min-h-[28rem] place-items-center overflow-auto rounded-2xl bg-slate-100 p-5 dark:bg-slate-950 sm:min-h-[38rem]">
             <div class="w-full max-w-4xl overflow-hidden shadow-xl" :style="canvasStyle">
-              <svg ref="svgCanvas" :viewBox="`0 0 ${width} ${height}`" class="h-full w-full touch-none select-none" :class="transparentBackground ? 'bg-[linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] bg-[length:24px_24px] bg-[position:0_0,0_12px,12px_-12px,-12px_0] dark:bg-slate-800' : ''" :style="transparentBackground ? undefined : { backgroundColor: background }" aria-label="Preview SVG" @pointerdown.self="handleCanvasPointerDown">
-                <defs><pattern id="svg-maker-grid" :width="gridSize" :height="gridSize" patternUnits="userSpaceOnUse"><path :d="`M ${gridSize} 0 L 0 0 0 ${gridSize}`" fill="none" stroke="currentColor" stroke-width="1" /></pattern></defs>
-                <rect v-if="showGrid" width="100%" height="100%" fill="url(#svg-maker-grid)" class="pointer-events-none text-slate-400/35 dark:text-slate-500/30" />
-                <g v-for="element in elements" :key="element.id" class="cursor-move" :class="{ '[filter:drop-shadow(0_0_5px_rgba(217,70,239,0.9))]': selectedId === element.id }" @pointerdown.stop="beginDrag($event, element)">
-                  <rect v-if="element.type === 'rectangle'" :x="element.x" :y="element.y" :width="element.width" :height="element.height" :rx="element.cornerRadius" :fill="element.fill" :stroke="element.stroke" :stroke-width="element.strokeWidth" :opacity="element.opacity / 100" />
-                  <circle v-else-if="element.type === 'circle'" :cx="element.x" :cy="element.y" :r="element.radius" :fill="element.fill" :stroke="element.stroke" :stroke-width="element.strokeWidth" :opacity="element.opacity / 100" />
-                  <ellipse v-else-if="element.type === 'ellipse'" :cx="element.x" :cy="element.y" :rx="element.radiusX" :ry="element.radiusY" :fill="element.fill" :stroke="element.stroke" :stroke-width="element.strokeWidth" :opacity="element.opacity / 100" />
-                  <line v-else-if="element.type === 'line'" :x1="element.x" :y1="element.y" :x2="element.x2" :y2="element.y2" :stroke="element.stroke" :stroke-width="element.strokeWidth" :opacity="element.opacity / 100" stroke-linecap="round" />
-                  <path v-else-if="element.type === 'path'" :d="buildSvgPathData(element.nodes, element.closed)" :fill="element.fill" :stroke="element.stroke" :stroke-width="element.strokeWidth" :opacity="element.opacity / 100" stroke-linejoin="round" stroke-linecap="round" />
-                  <text v-else :x="element.x" :y="element.y" font-family="Arial, sans-serif" :font-size="element.fontSize" :font-weight="element.fontWeight" :fill="element.fill" :stroke="element.stroke" :stroke-width="element.strokeWidth" :opacity="element.opacity / 100">{{ element.text }}</text>
-                </g>
-                <g v-if="editableNodes.length && selectedElement">
-                  <circle v-for="node in editableNodes" :key="node.id" :cx="node.x" :cy="node.y" :r="selectedNodeId === node.id ? 10 : 8" :fill="selectedNodeId === node.id ? '#facc15' : '#ffffff'" stroke="#c026d3" stroke-width="4" class="cursor-crosshair" @pointerdown.stop="beginNodeDrag($event, selectedElement, node)" />
-                  <text v-for="(node, index) in editableNodes" :key="`${node.id}-label`" :x="node.x + 13" :y="node.y - 12" font-size="18" font-weight="700" fill="#c026d3" class="pointer-events-none">{{ index + 1 }}</text>
-                </g>
-              </svg>
+              <SvgCanvas :width="width" :height="height" :background="background" :transparent-background="transparentBackground" :elements="elements" :selected-id="selectedId" :grid-size="gridSize" :show-grid="showGrid" :editable-nodes="editableNodes" :selected-element="selectedElement" :selected-node-id="selectedNodeId" @ready="svgCanvas = $event" @canvas-pointer="handleCanvasPointerDown" @element-pointer="beginDrag" @node-pointer="beginNodeDrag" />
             </div>
           </div>
 

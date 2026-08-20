@@ -45,65 +45,115 @@ export function jsonToYaml(value: string) {
   return stringifyYaml(JSON.parse(value), { indent: 2, lineWidth: 0 })
 }
 
-function elementToValue(element: Element): unknown {
-  const result: Record<string, unknown> = {}
-  for (const attribute of Array.from(element.attributes)) result[`@${attribute.name}`] = attribute.value
-  const children = Array.from(element.children)
-  const text = Array.from(element.childNodes)
-    .filter((node) => node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE)
-    .map((node) => node.textContent ?? '')
-    .join('')
-    .trim()
+export interface XmlAttributeNode { name: string; value: string }
+export type XmlAstNode =
+  | { type: 'element'; name: string; attributes: XmlAttributeNode[]; children: XmlAstNode[] }
+  | { type: 'text' | 'cdata' | 'comment'; value: string }
+  | { type: 'processing-instruction'; target: string; data: string }
+  | { type: 'doctype'; name: string; publicId: string; systemId: string }
+export interface XmlAstDocument {
+  type: 'document'
+  declaration: { version: string; encoding?: string; standalone?: string } | null
+  children: XmlAstNode[]
+}
 
-  for (const child of children) {
-    const value = elementToValue(child)
-    const existing = result[child.tagName]
-    if (existing === undefined) result[child.tagName] = value
-    else if (Array.isArray(existing)) existing.push(value)
-    else result[child.tagName] = [existing, value]
+function domNodeToAst(node: Node): XmlAstNode | null {
+  if (node.nodeType === 1) {
+    const element = node as Element
+    return {
+      type: 'element',
+      name: element.tagName,
+      attributes: Array.from(element.attributes, (attribute) => ({ name: attribute.name, value: attribute.value })),
+      children: Array.from(element.childNodes).map(domNodeToAst).filter((child): child is XmlAstNode => child !== null),
+    }
   }
-  if (!children.length && !element.attributes.length) return text
-  if (text) result['#text'] = text
-  return result
+  if (node.nodeType === 3) return { type: 'text', value: node.nodeValue ?? '' }
+  if (node.nodeType === 4) return { type: 'cdata', value: node.nodeValue ?? '' }
+  if (node.nodeType === 8) return { type: 'comment', value: node.nodeValue ?? '' }
+  if (node.nodeType === 7) {
+    const instruction = node as ProcessingInstruction
+    return { type: 'processing-instruction', target: instruction.target, data: instruction.data }
+  }
+  if (node.nodeType === 10) {
+    const doctype = node as DocumentType
+    return { type: 'doctype', name: doctype.name, publicId: doctype.publicId, systemId: doctype.systemId }
+  }
+  return null
 }
 
 export function xmlToJson(value: string, indent = 2) {
   const document = new DOMParser().parseFromString(value, 'application/xml')
   const parserError = document.querySelector('parsererror')
   if (parserError || !document.documentElement) throw new Error('XML tidak valid.')
-  return JSON.stringify({ [document.documentElement.tagName]: elementToValue(document.documentElement) }, null, indent)
+  const declarationMatch = value.match(/^\s*<\?xml\s+version=["']([^"']+)["'](?:\s+encoding=["']([^"']+)["'])?(?:\s+standalone=["']([^"']+)["'])?\s*\?>/i)
+  const ast: XmlAstDocument = {
+    type: 'document',
+    declaration: declarationMatch ? {
+      version: declarationMatch[1]!,
+      ...(declarationMatch[2] ? { encoding: declarationMatch[2] } : {}),
+      ...(declarationMatch[3] ? { standalone: declarationMatch[3] } : {}),
+    } : null,
+    children: Array.from(document.childNodes).map(domNodeToAst).filter((child): child is XmlAstNode => child !== null),
+  }
+  return JSON.stringify(ast, null, indent)
 }
 
 function escapeXml(value: unknown) {
   return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 }
 
-function valueToXml(name: string, value: unknown, level: number): string {
-  if (!/^[A-Za-z_][\w.:-]*$/.test(name)) throw new Error(`Nama elemen XML tidak valid: ${name}`)
-  const padding = '  '.repeat(level)
-  if (Array.isArray(value)) return value.map((item) => valueToXml(name, item, level)).join('\n')
-  if (value === null || value === undefined) return `${padding}<${name}/>`
-  if (typeof value !== 'object') return `${padding}<${name}>${escapeXml(value)}</${name}>`
+function validateXmlName(name: unknown, kind: 'elemen' | 'atribut' | 'target') {
+  if (typeof name !== 'string' || !/^[\p{L}_:][\p{L}\p{N}_.:-]*$/u.test(name) || name.endsWith(':') || name.includes('::')) {
+    throw new Error(`Nama ${kind} XML tidak valid: ${String(name)}`)
+  }
+  return name
+}
 
-  const object = value as Record<string, unknown>
-  const attributes = Object.entries(object)
-    .filter(([key]) => key.startsWith('@'))
-    .map(([key, item]) => ` ${key.slice(1)}="${escapeXml(item)}"`)
-    .join('')
-  const text = object['#text'] === undefined ? '' : escapeXml(object['#text'])
-  const children = Object.entries(object).filter(([key]) => !key.startsWith('@') && key !== '#text')
-  if (!children.length && !text) return `${padding}<${name}${attributes}/>`
-  if (!children.length) return `${padding}<${name}${attributes}>${text}</${name}>`
-  const childXml = children.map(([key, item]) => valueToXml(key, item, level + 1)).join('\n')
-  return `${padding}<${name}${attributes}>${text ? `\n${'  '.repeat(level + 1)}${text}` : ''}\n${childXml}\n${padding}</${name}>`
+function astNodeToXml(node: XmlAstNode): string {
+  if (!node || typeof node !== 'object' || typeof node.type !== 'string') throw new Error('Node AST XML tidak valid.')
+  if (node.type === 'text') return escapeXml(node.value)
+  if (node.type === 'cdata') {
+    if (node.value.includes(']]>')) throw new Error('CDATA tidak boleh mengandung ]]> secara langsung.')
+    return `<![CDATA[${node.value}]]>`
+  }
+  if (node.type === 'comment') {
+    if (node.value.includes('--') || node.value.endsWith('-')) throw new Error('Isi komentar XML tidak valid.')
+    return `<!--${node.value}-->`
+  }
+  if (node.type === 'processing-instruction') {
+    const target = validateXmlName(node.target, 'target')
+    if (target.toLocaleLowerCase('en') === 'xml' || node.data.includes('?>')) throw new Error('Processing instruction XML tidak valid.')
+    return `<?${target}${node.data ? ` ${node.data}` : ''}?>`
+  }
+  if (node.type === 'doctype') {
+    const name = validateXmlName(node.name, 'elemen')
+    if (node.publicId) return `<!DOCTYPE ${name} PUBLIC "${escapeXml(node.publicId)}" "${escapeXml(node.systemId)}">`
+    if (node.systemId) return `<!DOCTYPE ${name} SYSTEM "${escapeXml(node.systemId)}">`
+    return `<!DOCTYPE ${name}>`
+  }
+  if (node.type !== 'element') throw new Error(`Tipe node AST XML tidak didukung: ${(node as { type: string }).type}`)
+  const name = validateXmlName(node.name, 'elemen')
+  if (!Array.isArray(node.attributes) || !Array.isArray(node.children)) throw new Error(`Node elemen ${name} harus memiliki attributes dan children berupa array.`)
+  const seenAttributes = new Set<string>()
+  const attributes = node.attributes.map((attribute) => {
+    const attributeName = validateXmlName(attribute.name, 'atribut')
+    if (seenAttributes.has(attributeName)) throw new Error(`Atribut XML duplikat: ${attributeName}`)
+    seenAttributes.add(attributeName)
+    return ` ${attributeName}="${escapeXml(attribute.value)}"`
+  }).join('')
+  if (!node.children.length) return `<${name}${attributes}/>`
+  return `<${name}${attributes}>${node.children.map(astNodeToXml).join('')}</${name}>`
 }
 
 export function jsonToXml(value: string) {
-  const parsed: unknown = JSON.parse(value)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Root JSON harus berupa object dengan satu elemen root.')
-  const entries = Object.entries(parsed as Record<string, unknown>)
-  if (entries.length !== 1) throw new Error('Root JSON harus memiliki tepat satu elemen root.')
-  return `<?xml version="1.0" encoding="UTF-8"?>\n${valueToXml(entries[0]![0], entries[0]![1], 0)}`
+  const parsed = JSON.parse(value) as XmlAstDocument
+  if (!parsed || parsed.type !== 'document' || !Array.isArray(parsed.children)) throw new Error('Root JSON harus berupa AST XML bertipe document.')
+  const rootElements = parsed.children.filter((node) => node.type === 'element')
+  if (rootElements.length !== 1) throw new Error('Dokumen XML harus memiliki tepat satu root element.')
+  const declaration = parsed.declaration
+    ? `<?xml version="${escapeXml(parsed.declaration.version)}"${parsed.declaration.encoding ? ` encoding="${escapeXml(parsed.declaration.encoding)}"` : ''}${parsed.declaration.standalone ? ` standalone="${escapeXml(parsed.declaration.standalone)}"` : ''}?>`
+    : ''
+  return `${declaration}${parsed.children.map(astNodeToXml).join('')}`
 }
 
 export type DiffRowType = 'unchanged' | 'added' | 'deleted' | 'changed'

@@ -1,10 +1,12 @@
 import { toolRegistry } from '@/data/tools'
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { toolSeoTitle, updateRouteSeo } from '@/composables/useRouteSeo'
 
 const toolRoutes: RouteRecordRaw[] = toolRegistry.map((tool) => ({
   path: tool.path,
   name: tool.toolKey,
   component: tool.component,
+  meta: { seoTitle: toolSeoTitle(tool.name), seoDescription: tool.description, applicationName: tool.name },
   ...(tool.routeProps ? { props: tool.routeProps } : {}),
 }))
 
@@ -15,21 +17,25 @@ const router = createRouter({
       path: '/',
       name: 'beranda',
       component: () => import('@/pages/BerandaPage.vue'),
+      meta: { seoTitle: 'Dearga Free Tools', seoDescription: 'Kumpulan free tool praktis untuk developer, kreator, dan pekerja digital.' },
     },
     {
       path: '/free-tools',
       name: 'free-tools',
       component: () => import('@/pages/FreeToolsPage.vue'),
+      meta: { seoTitle: 'Free Online Tools', seoDescription: 'Jelajahi koleksi utility gratis untuk developer, teks, gambar, data, keamanan, dan produktivitas.' },
     },
     {
       path: '/about',
       name: 'about',
       component: () => import('@/pages/AboutPage.vue'),
+      meta: { seoTitle: 'About', seoDescription: 'Tentang Dearga Free Tools dan prinsip pemrosesan data secara lokal di browser.' },
     },
     {
       path: '/changelog',
       name: 'changelog',
       component: () => import('@/pages/ChangelogPage.vue'),
+      meta: { seoTitle: 'Changelog', seoDescription: 'Riwayat fitur, peningkatan, keamanan, dan perubahan Dearga Free Tools.' },
     },
     ...toolRoutes,
   ],
@@ -55,7 +61,14 @@ router.onError((error, to) => {
 })
 
 router.afterEach((to, _from, failure) => {
-  if (!failure) sessionStorage.removeItem(`router:lazy-reload:${to.fullPath}`)
+  if (failure) return
+  sessionStorage.removeItem(`router:lazy-reload:${to.fullPath}`)
+  updateRouteSeo({
+    title: String(to.meta.seoTitle ?? 'Dearga Free Tools'),
+    description: String(to.meta.seoDescription ?? 'Kumpulan free tool praktis yang berjalan langsung di browser.'),
+    path: to.path,
+    ...(to.meta.applicationName ? { applicationName: String(to.meta.applicationName) } : {}),
+  })
 })
 
 export default router

@@ -6,95 +6,101 @@ import {
   applyCronPreset,
   buildCronExpression,
   createCronBuilderState,
+  cronDayBehaviorExplanation,
   cronFieldDefinitions,
   describeCron,
+  getNextCronExecutions,
+  type CronDialect,
   type CronFieldDefinition,
 } from '@/composables/useCronTools'
 
 const presets = [
-  { label: 'Setiap menit', expression: '* * * * *', icon: 'mdi:timer-sand' },
-  { label: 'Setiap 5 menit', expression: '*/5 * * * *', icon: 'mdi:timer-outline' },
-  { label: 'Setiap jam', expression: '0 * * * *', icon: 'mdi:clock-outline' },
-  { label: 'Setiap hari', expression: '0 0 * * *', icon: 'mdi:calendar-today-outline' },
-  { label: 'Hari kerja 09:00', expression: '0 9 * * 1-5', icon: 'mdi:briefcase-clock-outline' },
-  { label: 'Awal bulan', expression: '0 0 1 * *', icon: 'mdi:calendar-month-outline' },
+  { label: 'Setiap menit', expression: '* * * * *' },
+  { label: 'Setiap 5 menit', expression: '*/5 * * * *' },
+  { label: 'Setiap jam', expression: '0 * * * *' },
+  { label: 'Setiap hari', expression: '0 0 * * *' },
+  { label: 'Hari kerja 09:00', expression: '0 9 * * MON-FRI' },
+  { label: 'Jan–Jun / 5 hari', expression: '0 8 1,5,10 JAN-JUN *' },
 ]
 const modeOptions = [
   { value: 'every', label: 'Setiap' },
   { value: 'specific', label: 'Pada nilai' },
   { value: 'interval', label: 'Setiap interval' },
   { value: 'range', label: 'Dalam rentang' },
+  { value: 'custom', label: 'List / expression' },
 ] as const
 const state = reactive(createCronBuilderState())
+const dialect = ref<CronDialect>('unix')
+const pastedExpression = ref('* * * * *')
+const timezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
 const copied = ref(false)
-const errorMessage = ref('')
-const expression = computed(() => buildCronExpression(state))
-const description = computed(() => describeCron(state))
+const actionError = ref('')
+const timezoneOptions = Array.from(new Set([timezone.value, 'UTC', 'Asia/Jakarta', 'Asia/Singapore', 'Asia/Tokyo', 'Europe/London', 'America/New_York', 'America/Los_Angeles']))
 
-function applyPreset(expressionValue: string) {
+const buildResult = computed(() => {
   try {
-    applyCronPreset(state, expressionValue)
-    errorMessage.value = ''
+    const expression = buildCronExpression(state, dialect.value)
+    return { expression, description: describeCron(state, dialect.value), error: '' }
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Preset tidak dapat digunakan.'
+    return { expression: '', description: '', error: error instanceof Error ? error.message : 'Cron tidak valid.' }
   }
-}
+})
+const nextExecutions = computed(() => {
+  if (!buildResult.value.expression) return []
+  try { return getNextCronExecutions(buildResult.value.expression, { dialect: dialect.value, timeZone: timezone.value, count: 5 }) }
+  catch { return [] }
+})
 
-function resetBuilder() {
-  applyPreset('* * * * *')
-}
-
-async function copyExpression() {
+function applyExpression(expressionValue: string, sourceDialect: CronDialect = dialect.value) {
   try {
-    await navigator.clipboard.writeText(expression.value)
-    copied.value = true
-    window.setTimeout(() => (copied.value = false), 1_500)
-  } catch {
-    errorMessage.value = 'Browser tidak mengizinkan penyalinan otomatis.'
-  }
+    applyCronPreset(state, expressionValue, sourceDialect)
+    actionError.value = ''
+  } catch (error) { actionError.value = error instanceof Error ? error.message : 'Expression tidak dapat diparse.' }
 }
-
+function applyPreset(expressionValue: string) { applyExpression(expressionValue, 'unix') }
+function resetBuilder() { applyExpression('* * * * *', 'unix') }
+async function copyExpression() {
+  if (!buildResult.value.expression) return
+  try { await navigator.clipboard.writeText(buildResult.value.expression); copied.value = true; window.setTimeout(() => (copied.value = false), 1_500) }
+  catch { actionError.value = 'Browser tidak mengizinkan penyalinan otomatis.' }
+}
 function valueLabel(definition: CronFieldDefinition, value: number) {
   if (definition.key === 'dayOfWeek') return ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][value]
   if (definition.key === 'month') return ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][value - 1]
   return String(value).padStart(2, '0')
 }
+function formatExecution(date: Date) {
+  return new Intl.DateTimeFormat('id-ID', { timeZone: timezone.value, dateStyle: 'full', timeStyle: 'short' }).format(date)
+}
 </script>
 
 <template>
-  <ToolPageShell title="Cron Expression Builder" description="Susun ekspresi cron lima field secara visual, gunakan preset, lalu salin jadwal yang siap dipakai." icon="mdi:calendar-clock-outline" category="Developer">
-    <section>
-      <div class="flex items-center justify-between gap-4">
-        <div><h2 class="text-lg font-black text-slate-950 dark:text-white">Mulai dari preset</h2><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Pilih jadwal umum atau atur setiap field secara manual.</p></div>
-        <button type="button" class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" @click="resetBuilder"><Icon icon="mdi:restore" class="size-5" /> Reset</button>
-      </div>
-      <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <button v-for="preset in presets" :key="preset.expression" type="button" class="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border px-3 py-3 text-center text-xs font-bold transition" :class="expression === preset.expression ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/10' : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/50 dark:border-slate-700 dark:text-slate-300 dark:hover:border-indigo-500 dark:hover:bg-indigo-500/5'" @click="applyPreset(preset.expression)"><Icon :icon="preset.icon" class="size-5" />{{ preset.label }}</button>
-      </div>
+  <ToolPageShell title="Cron Expression Builder" description="Parse, validasi, susun, dan preview cron Unix, GitHub Actions, atau Quartz tanpa silent clamping." icon="mdi:calendar-clock-outline" category="Developer">
+    <section class="grid gap-4 rounded-2xl border border-slate-200 p-5 dark:border-slate-700 lg:grid-cols-[12rem_1fr_auto]">
+      <label class="text-sm font-bold">Dialect<select v-model="dialect" class="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950"><option value="unix">Unix (5 field)</option><option value="github">GitHub Actions</option><option value="quartz">Quartz (6 field)</option></select></label>
+      <label class="text-sm font-bold">Paste cron expression<input v-model="pastedExpression" class="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 font-mono outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-950" placeholder="0 9 * * MON-FRI" @keyup.enter="applyExpression(pastedExpression)" /></label>
+      <button type="button" class="min-h-11 self-end rounded-xl bg-indigo-600 px-5 font-bold text-white hover:bg-indigo-700" @click="applyExpression(pastedExpression)">Parse ke builder</button>
     </section>
 
-    <section class="mt-8">
-      <h2 class="text-lg font-black text-slate-950 dark:text-white">Atur field cron</h2>
-      <div class="mt-4 grid gap-3 lg:grid-cols-5">
-        <article v-for="definition in cronFieldDefinitions" :key="definition.key" class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
-          <div class="flex items-center justify-between gap-2"><h3 class="font-black text-slate-950 dark:text-white">{{ definition.label }}</h3><code class="rounded-md bg-white px-2 py-1 text-xs font-black text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-300">{{ expression.split(' ')[cronFieldDefinitions.indexOf(definition)] }}</code></div>
-          <label class="mt-4 block text-xs font-bold text-slate-500 dark:text-slate-400">Mode<select v-model="state[definition.key].mode" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"><option v-for="mode in modeOptions" :key="mode.value" :value="mode.value">{{ mode.label }}</option></select></label>
+    <section class="mt-7"><div class="flex items-center justify-between gap-4"><div><h2 class="text-lg font-black">Preset</h2><p class="mt-1 text-sm text-slate-500">Preset dimuat ke builder lalu diserialisasi sesuai dialect.</p></div><button type="button" class="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold dark:border-slate-700" @click="resetBuilder"><Icon icon="mdi:restore" class="size-5" /> Reset</button></div><div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"><button v-for="preset in presets" :key="preset.expression" type="button" class="min-h-16 rounded-xl border border-slate-200 px-3 text-xs font-bold transition hover:border-indigo-400 hover:bg-indigo-50 dark:border-slate-700 dark:hover:bg-indigo-500/10" @click="applyPreset(preset.expression)">{{ preset.label }}</button></div></section>
 
-          <label v-if="state[definition.key].mode === 'specific'" class="mt-3 block text-xs font-bold text-slate-500 dark:text-slate-400">Nilai<select v-model.number="state[definition.key].value" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"><option v-for="value in definition.max - definition.min + 1" :key="value + definition.min - 1" :value="value + definition.min - 1">{{ valueLabel(definition, value + definition.min - 1) }}</option></select></label>
-          <label v-else-if="state[definition.key].mode === 'interval'" class="mt-3 block text-xs font-bold text-slate-500 dark:text-slate-400">Interval<input v-model.number="state[definition.key].step" type="number" min="1" :max="definition.max - definition.min + 1" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white" /></label>
-          <div v-else-if="state[definition.key].mode === 'range'" class="mt-3 grid grid-cols-[1fr_auto_1fr] items-end gap-2"><label class="block text-xs font-bold text-slate-500 dark:text-slate-400">Dari<input v-model.number="state[definition.key].start" type="number" :min="definition.min" :max="definition.max" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white" /></label><span class="pb-3 text-slate-400">–</span><label class="block text-xs font-bold text-slate-500 dark:text-slate-400">Sampai<input v-model.number="state[definition.key].end" type="number" :min="definition.min" :max="definition.max" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white" /></label></div>
-          <p v-else class="mt-3 min-h-11 rounded-xl bg-white px-3 py-3 text-xs font-semibold text-slate-400 dark:bg-slate-900">Semua {{ definition.shortLabel }}</p>
-          <p class="mt-3 text-[11px] font-semibold text-slate-400">Rentang {{ definition.min }}–{{ definition.max }}</p>
-        </article>
-      </div>
-    </section>
+    <section class="mt-8"><h2 class="text-lg font-black">Atur field cron</h2><div class="mt-4 grid gap-3 lg:grid-cols-5">
+      <article v-for="definition in cronFieldDefinitions" :key="definition.key" class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
+        <h3 class="font-black">{{ definition.label }}</h3>
+        <label class="mt-3 block text-xs font-bold text-slate-500">Mode<select v-model="state[definition.key].mode" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold dark:border-slate-700 dark:bg-slate-900"><option v-for="option in modeOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+        <label v-if="state[definition.key].mode === 'specific'" class="mt-3 block text-xs font-bold text-slate-500">Nilai<select v-model.number="state[definition.key].value" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-900"><option v-for="value in definition.max - definition.min + 1" :key="value" :value="value + definition.min - 1">{{ valueLabel(definition, value + definition.min - 1) }}</option></select></label>
+        <label v-else-if="state[definition.key].mode === 'interval'" class="mt-3 block text-xs font-bold text-slate-500">Interval<input v-model.number="state[definition.key].step" type="number" min="1" :max="definition.max - definition.min + 1" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-900" /></label>
+        <div v-else-if="state[definition.key].mode === 'range'" class="mt-3 grid grid-cols-2 gap-2"><label class="text-xs font-bold text-slate-500">Dari<input v-model.number="state[definition.key].start" type="number" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900" /></label><label class="text-xs font-bold text-slate-500">Sampai<input v-model.number="state[definition.key].end" type="number" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900" /></label></div>
+        <label v-else-if="state[definition.key].mode === 'custom'" class="mt-3 block text-xs font-bold text-slate-500">List / range / step<input v-model="state[definition.key].custom" class="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono uppercase dark:border-slate-700 dark:bg-slate-900" :placeholder="definition.key === 'dayOfWeek' ? 'MON-FRI' : definition.key === 'month' ? 'JAN,JUN,DEC' : '10-50/5'" /></label>
+        <p v-else class="mt-3 min-h-11 rounded-xl bg-white px-3 py-3 text-xs font-semibold text-slate-400 dark:bg-slate-900">Semua {{ definition.shortLabel }}</p>
+        <p class="mt-3 text-[11px] font-semibold text-slate-400">Valid: {{ definition.min }}–{{ definition.max }}<template v-if="definition.aliases"> atau alias</template></p>
+      </article>
+    </div></section>
 
-    <section class="mt-8 overflow-hidden rounded-2xl bg-slate-950 text-white shadow-xl shadow-slate-200 dark:shadow-none">
-      <div class="border-b border-white/10 p-5 sm:p-6"><div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><p class="text-xs font-black uppercase tracking-[0.18em] text-indigo-300">Cron expression</p><code class="mt-2 block break-all text-2xl font-black tracking-wider sm:text-3xl">{{ expression }}</code></div><button type="button" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-5 font-bold text-white transition hover:bg-indigo-400" @click="copyExpression"><Icon :icon="copied ? 'mdi:check' : 'mdi:content-copy'" class="size-5" />{{ copied ? 'Tersalin' : 'Salin expression' }}</button></div></div>
-      <div class="grid grid-cols-5 divide-x divide-white/10 bg-white/5 px-2 py-4 text-center"><div v-for="definition in cronFieldDefinitions" :key="definition.key" class="px-1"><code class="block text-sm font-black text-indigo-200">{{ expression.split(' ')[cronFieldDefinitions.indexOf(definition)] }}</code><span class="mt-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">{{ definition.label }}</span></div></div>
-    </section>
+    <p v-if="buildResult.error || actionError" role="alert" class="mt-5 rounded-xl bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">{{ actionError || buildResult.error }}</p>
+    <section v-else class="mt-8 overflow-hidden rounded-2xl bg-slate-950 text-white"><div class="flex flex-col justify-between gap-4 border-b border-white/10 p-5 sm:flex-row sm:items-center"><div><p class="text-xs font-black uppercase tracking-wider text-indigo-300">Valid {{ dialect }} expression</p><code class="mt-2 block break-all text-2xl font-black sm:text-3xl">{{ buildResult.expression }}</code></div><button type="button" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-5 font-bold hover:bg-indigo-400" @click="copyExpression"><Icon :icon="copied ? 'mdi:check' : 'mdi:content-copy'" class="size-5" />{{ copied ? 'Tersalin' : 'Salin' }}</button></div><p class="p-5 text-sm text-slate-300">{{ buildResult.description }}</p></section>
 
-    <div class="mt-5 flex items-start gap-3 rounded-2xl bg-indigo-50 p-4 text-indigo-800 dark:bg-indigo-500/10 dark:text-indigo-200"><Icon icon="mdi:text-box-check-outline" class="mt-0.5 size-5 shrink-0" /><div><p class="font-bold">{{ description }}</p><p class="mt-1 text-xs leading-5 text-indigo-600 dark:text-indigo-300">Format: menit, jam, tanggal, bulan, hari. Cron memakai zona waktu server atau platform tempat jadwal dijalankan.</p></div></div>
-    <p v-if="errorMessage" role="alert" class="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">{{ errorMessage }}</p>
+    <section class="mt-6 grid gap-5 lg:grid-cols-[16rem_1fr]"><label class="text-sm font-bold">Timezone preview<select v-model="timezone" class="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950"><option v-for="zone in timezoneOptions" :key="zone" :value="zone">{{ zone }}</option></select></label><div><h2 class="text-sm font-black">5 eksekusi berikutnya</h2><ol class="mt-2 space-y-2"><li v-for="(date, index) in nextExecutions" :key="date.toISOString()" class="rounded-xl bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-800 dark:bg-indigo-500/10 dark:text-indigo-200"><span class="mr-2 text-indigo-400">{{ index + 1 }}.</span>{{ formatExecution(date) }}</li></ol></div></section>
+    <div class="mt-5 rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><p class="font-bold">Perilaku Day of month / Day of week</p><p>{{ cronDayBehaviorExplanation(dialect) }}</p><p v-if="dialect === 'github'" class="mt-2">GitHub Actions memakai UTC secara default dan interval schedule tercepat yang dijamin adalah 5 menit.</p></div>
   </ToolPageShell>
 </template>

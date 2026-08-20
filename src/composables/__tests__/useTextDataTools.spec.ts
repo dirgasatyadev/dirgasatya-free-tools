@@ -15,10 +15,20 @@ describe('text and data tool helpers', () => {
     expect(jsonToYaml('{"active":true}')).toContain('active: true')
   })
 
-  it('mengonversi XML dan JSON beserta atribut dan array', () => {
-    const json = xmlToJson('<root id="1"><item>A</item><item>B</item></root>')
-    expect(JSON.parse(json)).toEqual({ root: { '@id': '1', item: ['A', 'B'] } })
-    expect(jsonToXml(json)).toContain('<item>A</item>')
+  it('melakukan round-trip XML AST dengan mixed content dan namespace', () => {
+    const xml = '<?xml version="1.0"?><p xmlns:x="urn:x">Hello <x:b id="1">world</x:b>!<![CDATA[ raw ]]><!--ok--><?next run?></p>'
+    const json = xmlToJson(xml)
+    const ast = JSON.parse(json)
+    expect(ast.type).toBe('document')
+    expect(ast.children.at(-1).children.map((node: { type: string }) => node.type)).toEqual([
+      'text', 'element', 'text', 'cdata', 'comment', 'processing-instruction',
+    ])
+    expect(jsonToXml(json)).toBe(xml)
+  })
+
+  it('menolak nama atribut XML yang tidak valid', () => {
+    const invalidAst = JSON.stringify({ type: 'document', declaration: null, children: [{ type: 'element', name: 'root', attributes: [{ name: 'bad name', value: 'x' }], children: [] }] })
+    expect(() => jsonToXml(invalidAst)).toThrow('Nama atribut XML tidak valid')
   })
 
   it('membuat diff added, deleted, dan changed secara side-by-side', () => {

@@ -13,10 +13,13 @@ npm run dev
 
 ```sh
 npm run lint
+npm run lint:check
 npm run type-check
-npm run test:unit -- --run
+npm test
 npm run build
 ```
+
+`lint` memperbaiki source lokal, sedangkan `lint:check` hanya memverifikasi dan digunakan oleh CI. Saat build production, set `SITE_URL` atau `VITE_SITE_URL` ke origin deployment agar canonical URL, sitemap, dan robots.txt menggunakan domain yang benar.
 
 ## Cloudflare Workers
 

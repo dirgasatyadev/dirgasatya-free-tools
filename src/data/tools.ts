@@ -1,20 +1,5 @@
 import type { FreeTool, RegisteredTool, ToolCategory } from '@/type/tool'
 
-export const toolCategories: ToolCategory[] = [
-  'Developer',
-  'Text',
-  'Image',
-  'PDF',
-  'Converter',
-  'File',
-  'Design',
-  'Productivity',
-  'Calculator',
-  'Security & Privacy',
-  'Web',
-  'Data',
-]
-
 export const toolRegistry: RegisteredTool[] = [
   {
     id: 1,
@@ -195,3 +180,6 @@ function toCatalogTool(tool: RegisteredTool): FreeTool {
 }
 
 export const tools: FreeTool[] = toolRegistry.map(toCatalogTool)
+export const toolCategories: ToolCategory[] = Array.from(new Set(
+  tools.filter((tool) => tool.status === 'available').map((tool) => tool.category),
+))

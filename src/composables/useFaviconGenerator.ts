@@ -71,17 +71,26 @@ export function normalizeFaviconWebsiteUrl(value: string) {
   return url.href.replace(/\/$/, '')
 }
 
-export function createFaviconAssetUrl(websiteUrl: string, fileName: string) {
+export function normalizeFaviconAssetPath(value: string) {
+  const trimmed = value.trim().replace(/\\/g, '/')
+  if (!trimmed) return '/'
+  const safe = trimmed.split('/').filter(Boolean).map((part) => encodeURIComponent(part)).join('/')
+  return `/${safe}${safe ? '/' : ''}`
+}
+
+export function createFaviconAssetUrl(websiteUrl: string, fileName: string, assetPath = '/') {
   const normalizedUrl = normalizeFaviconWebsiteUrl(websiteUrl)
   const encodedFileName = encodeURIComponent(fileName)
-  return normalizedUrl ? `${normalizedUrl}/${encodedFileName}` : `/${encodedFileName}`
+  const path = `${normalizeFaviconAssetPath(assetPath)}${encodedFileName}`
+  return normalizedUrl ? new URL(path, `${normalizedUrl}/`).href : path
 }
 
 export function createFaviconManifest(
   websiteUrl: string,
   appName: string,
   backgroundColor: string,
-  icons: readonly { size: number; fileName: string }[],
+  icons: readonly { size: number; fileName: string; purpose?: 'any' | 'maskable' }[],
+  assetPath = '/',
 ) {
   const normalizedUrl = normalizeFaviconWebsiteUrl(websiteUrl)
   const safeAppName = createFaviconBaseName(appName)
@@ -95,15 +104,73 @@ export function createFaviconManifest(
       background_color: backgroundColor,
       theme_color: backgroundColor,
       icons: icons.map((icon) => ({
-        src: createFaviconAssetUrl(websiteUrl, icon.fileName),
+        src: createFaviconAssetUrl(websiteUrl, icon.fileName, assetPath),
         sizes: `${icon.size}x${icon.size}`,
         type: 'image/png',
-        purpose: 'any',
+        purpose: icon.purpose ?? 'any',
       })),
     },
     null,
     2,
   )
+}
+
+export function createFaviconHtmlSnippet(baseName = 'favicon', assetPath = '/icons/') {
+  const path = normalizeFaviconAssetPath(assetPath)
+  const safeBaseName = createFaviconBaseName(baseName)
+  return [
+    `<link rel="icon" href="${path}favicon.ico" sizes="any">`,
+    `<link rel="icon" type="image/svg+xml" href="${path}favicon.svg">`,
+    `<link rel="icon" type="image/png" sizes="32x32" href="${path}${safeBaseName}-32x32.png">`,
+    `<link rel="apple-touch-icon" sizes="180x180" href="${path}${safeBaseName}-apple-touch-180x180.png">`,
+    '<link rel="manifest" href="/manifest.webmanifest">',
+  ].join('\n')
+}
+
+export async function createPngIco(images: readonly { size: number; blob: Blob }[]) {
+  if (!images.length) throw new Error('ICO membutuhkan minimal satu PNG.')
+  const entries = await Promise.all(images.map(async (image) => ({ ...image, bytes: new Uint8Array(await image.blob.arrayBuffer()) })))
+  const headerSize = 6 + entries.length * 16
+  const totalSize = headerSize + entries.reduce((total, entry) => total + entry.bytes.length, 0)
+  const buffer = new ArrayBuffer(totalSize)
+  const view = new DataView(buffer)
+  view.setUint16(0, 0, true); view.setUint16(2, 1, true); view.setUint16(4, entries.length, true)
+  let offset = headerSize
+  entries.forEach((entry, index) => {
+    const entryOffset = 6 + index * 16
+    view.setUint8(entryOffset, entry.size >= 256 ? 0 : entry.size)
+    view.setUint8(entryOffset + 1, entry.size >= 256 ? 0 : entry.size)
+    view.setUint8(entryOffset + 2, 0); view.setUint8(entryOffset + 3, 0)
+    view.setUint16(entryOffset + 4, 1, true); view.setUint16(entryOffset + 6, 32, true)
+    view.setUint32(entryOffset + 8, entry.bytes.length, true); view.setUint32(entryOffset + 12, offset, true)
+    new Uint8Array(buffer, offset, entry.bytes.length).set(entry.bytes)
+    offset += entry.bytes.length
+  })
+  return new Blob([buffer], { type: 'image/x-icon' })
+}
+
+export async function createSvgFavicon(source: Blob) {
+  const bytes = new Uint8Array(await source.arrayBuffer())
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  const dataUrl = `data:${source.type || 'image/png'};base64,${btoa(binary)}`
+  return new Blob([`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><image href="${dataUrl}" width="512" height="512" preserveAspectRatio="xMidYMid meet"/></svg>`], { type: 'image/svg+xml' })
+}
+
+export async function createMaskableIcon(source: Blob, size: number, backgroundColor: string) {
+  const bitmap = await createImageBitmap(source)
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = size; canvas.height = size
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Browser tidak dapat membuat ikon maskable.')
+    context.fillStyle = backgroundColor
+    context.fillRect(0, 0, size, size)
+    const safeSize = size * 0.8
+    const rect = calculateFaviconDrawRect(bitmap.width, bitmap.height, safeSize, 'contain')
+    context.drawImage(bitmap, (size - safeSize) / 2 + rect.x, (size - safeSize) / 2 + rect.y, rect.width, rect.height)
+    return canvasToPngBlob(canvas)
+  } finally { bitmap.close() }
 }
 
 export function calculateFaviconDrawRect(

@@ -4,7 +4,9 @@ import {
   createFaviconAssetUrl,
   createFaviconBaseName,
   createFaviconFileName,
+  createFaviconHtmlSnippet,
   createFaviconManifest,
+  createPngIco,
   faviconSizes,
   validateFaviconSource,
 } from '@/composables/useFaviconGenerator'
@@ -48,7 +50,7 @@ describe('Favicon Generator helpers', () => {
 
   it('membuat URL aset relatif atau absolut untuk manifest', () => {
     expect(createFaviconAssetUrl('', 'brand-192x192.png')).toBe('/brand-192x192.png')
-    expect(createFaviconAssetUrl('example.com/icons/', 'brand icon.png')).toBe(
+    expect(createFaviconAssetUrl('example.com', 'brand icon.png', '/icons/')).toBe(
       'https://example.com/icons/brand%20icon.png',
     )
   })
@@ -58,7 +60,7 @@ describe('Favicon Generator helpers', () => {
       createFaviconManifest('https://example.com/assets', 'Brand App', '#ffffff', [
         { size: 192, fileName: 'brand-pwa-192x192.png' },
         { size: 512, fileName: 'brand-pwa-512x512.png' },
-      ]),
+      ], '/icons/'),
     ) as {
       name: string
       start_url: string
@@ -70,10 +72,22 @@ describe('Favicon Generator helpers', () => {
     expect(manifest.icons).toHaveLength(2)
     expect(manifest.icons[1]).toEqual(
       expect.objectContaining({
-        src: 'https://example.com/assets/brand-pwa-512x512.png',
+        src: 'https://example.com/icons/brand-pwa-512x512.png',
         sizes: '512x512',
         type: 'image/png',
       }),
     )
+  })
+
+  it('membuat snippet dan ICO multi-size berbasis PNG', async () => {
+    expect(createFaviconHtmlSnippet('brand', '/icons/')).toContain('/icons/favicon.ico')
+    expect(createFaviconHtmlSnippet('brand', '/icons/')).toContain('brand-32x32.png')
+    const ico = await createPngIco([
+      { size: 16, blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }) },
+      { size: 32, blob: new Blob([new Uint8Array([4, 5])], { type: 'image/png' }) },
+    ])
+    const header = new DataView(await ico.arrayBuffer())
+    expect(header.getUint16(2, true)).toBe(1)
+    expect(header.getUint16(4, true)).toBe(2)
   })
 })

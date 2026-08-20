@@ -1,4 +1,7 @@
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { getAdaptiveGreenScreenPixelLimit, supportsOffscreenImageProcessing } from '@/composables/imageSafety'
+import { processGreenScreenInWorker } from '@/composables/image/imageWorker'
+import { useImageBatchQueue } from '@/composables/image/useImageBatchQueue'
 
 const maxFileSize = 25 * 1024 * 1024
 export const maxGreenScreenPixels = 40_000_000
@@ -274,7 +277,7 @@ export function detectGreenScreenKeyColor(
   }
 }
 
-function applyChromaKey(
+export function applyChromaKey(
   imageData: ImageData,
   selectedTolerance: number,
   selectedSoftness: number,
@@ -321,18 +324,9 @@ export function useGreenScreenRemover() {
   const isDragging = ref(false)
   const errorMessage = ref('')
   let itemSequence = 0
+  const adaptiveMaxPixels = getAdaptiveGreenScreenPixelLimit()
 
-  const completedCount = computed(
-    () => items.value.filter((item) => item.status === 'completed').length,
-  )
-  const failedCount = computed(() => items.value.filter((item) => item.status === 'error').length)
-  const processedCount = computed(() => completedCount.value + failedCount.value)
-  const progressPercentage = computed(() =>
-    items.value.length === 0 ? 0 : Math.round((processedCount.value / items.value.length) * 100),
-  )
-  const hasProcessableItems = computed(() =>
-    items.value.some((item) => item.status === 'queued' || item.status === 'error'),
-  )
+  const { completedCount, failedCount, processedCount, progressPercentage, hasProcessableItems } = useImageBatchQueue(items)
 
   function revokeUrl(url: string) {
     if (url) URL.revokeObjectURL(url)
@@ -389,34 +383,31 @@ export function useGreenScreenRemover() {
   ) {
     item.status = 'processing'
     item.errorMessage = ''
-    let bitmap: ImageBitmap | undefined
 
     try {
-      bitmap = await createImageBitmap(item.editSourceBlob ?? item.file)
-      if (bitmap.width <= 0 || bitmap.height <= 0) throw new Error('Dimensi gambar tidak valid.')
-      if (bitmap.width * bitmap.height > maxGreenScreenPixels) {
-        throw new Error('Resolusi gambar maksimal 40 megapiksel.')
+      const source = item.editSourceBlob ?? item.file
+      let outputBlob: Blob
+      if (supportsOffscreenImageProcessing()) {
+        const result = await processGreenScreenInWorker({ source, tolerance: selectedTolerance, softness: selectedSoftness, keyColor: item.keyColor, autoDetect: !item.isEdited, maxPixels: adaptiveMaxPixels })
+        outputBlob = result.outputBlob
+        if (!item.isEdited) item.keyColor = result.keyColor
+      } else {
+        const bitmap = await createImageBitmap(source)
+        try {
+          if (bitmap.width * bitmap.height > adaptiveMaxPixels) throw new Error(`Resolusi gambar melebihi batas adaptif ${Math.round(adaptiveMaxPixels / 1_000_000)} MP.`)
+          const canvas = document.createElement('canvas')
+          canvas.width = bitmap.width
+          canvas.height = bitmap.height
+          const context = canvas.getContext('2d', { willReadFrequently: true })
+          if (!context) throw new Error('Browser tidak dapat membaca gambar ini.')
+          context.drawImage(bitmap, 0, 0)
+          const imageData = context.getImageData(0, 0, bitmap.width, bitmap.height)
+          if (!item.isEdited) item.keyColor = detectGreenScreenKeyColor(imageData.data, bitmap.width, bitmap.height) ?? item.keyColor
+          applyChromaKey(imageData, selectedTolerance, selectedSoftness, item.keyColor)
+          context.putImageData(imageData, 0, 0)
+          outputBlob = await canvasToPngBlob(canvas)
+        } finally { bitmap.close() }
       }
-
-      const canvas = document.createElement('canvas')
-      canvas.width = bitmap.width
-      canvas.height = bitmap.height
-      const context = canvas.getContext('2d', { willReadFrequently: true })
-      if (!context) throw new Error('Browser tidak dapat membaca gambar ini.')
-
-      context.drawImage(bitmap, 0, 0)
-      const imageData = context.getImageData(0, 0, bitmap.width, bitmap.height)
-      if (!item.isEdited) {
-        const detectedKeyColor = detectGreenScreenKeyColor(
-          imageData.data,
-          bitmap.width,
-          bitmap.height,
-        )
-        if (detectedKeyColor) item.keyColor = detectedKeyColor
-      }
-      applyChromaKey(imageData, selectedTolerance, selectedSoftness, item.keyColor)
-      context.putImageData(imageData, 0, 0)
-      const outputBlob = await canvasToPngBlob(canvas)
 
       clearItemOutput(item)
       item.outputBlob = outputBlob
@@ -426,8 +417,6 @@ export function useGreenScreenRemover() {
       item.status = 'error'
       item.errorMessage =
         error instanceof Error ? error.message : 'Green screen tidak dapat dihapus.'
-    } finally {
-      bitmap?.close()
     }
   }
 
@@ -439,8 +428,8 @@ export function useGreenScreenRemover() {
       item.errorMessage = 'Area edit tidak valid.'
       return false
     }
-    if (sourceCanvas.width * sourceCanvas.height > maxGreenScreenPixels) {
-      item.errorMessage = 'Resolusi gambar maksimal 40 megapiksel.'
+    if (sourceCanvas.width * sourceCanvas.height > adaptiveMaxPixels) {
+      item.errorMessage = `Resolusi gambar melebihi batas adaptif ${Math.round(adaptiveMaxPixels / 1_000_000)} MP.`
       return false
     }
 
@@ -452,12 +441,17 @@ export function useGreenScreenRemover() {
 
     try {
       const sourceBlob = await canvasToPngBlob(sourceCanvas)
-      const context = sourceCanvas.getContext('2d', { willReadFrequently: true })
-      if (!context) throw new Error('Browser tidak dapat membaca hasil edit.')
-      const imageData = context.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height)
-      applyChromaKey(imageData, tolerance.value, softness.value, keyColor)
-      context.putImageData(imageData, 0, 0)
-      const outputBlob = await canvasToPngBlob(sourceCanvas)
+      let outputBlob: Blob
+      if (supportsOffscreenImageProcessing()) {
+        outputBlob = (await processGreenScreenInWorker({ source: sourceBlob, tolerance: tolerance.value, softness: softness.value, keyColor, autoDetect: false, maxPixels: adaptiveMaxPixels })).outputBlob
+      } else {
+        const context = sourceCanvas.getContext('2d', { willReadFrequently: true })
+        if (!context) throw new Error('Browser tidak dapat membaca hasil edit.')
+        const imageData = context.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height)
+        applyChromaKey(imageData, tolerance.value, softness.value, keyColor)
+        context.putImageData(imageData, 0, 0)
+        outputBlob = await canvasToPngBlob(sourceCanvas)
+      }
 
       revokeUrl(item.editSourcePreviewUrl)
       clearItemOutput(item)
@@ -528,6 +522,7 @@ export function useGreenScreenRemover() {
 
   return {
     items,
+    adaptiveMaxPixels,
     tolerance,
     softness,
     isProcessing,

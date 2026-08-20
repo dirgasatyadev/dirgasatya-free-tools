@@ -24,6 +24,7 @@ import {
 
 const {
   items,
+  adaptiveMaxPixels,
   quality,
   isConverting,
   isDragging,
@@ -36,6 +37,7 @@ const {
   addFiles,
   removeItem,
   convertAll,
+  cancelConversion,
   applyCrop,
   reset,
 } = usePngToAvif()
@@ -251,7 +253,9 @@ async function saveCrop() {
 
     const outputWidth = Math.max(1, Math.round(selection.width / displayedScale))
     const outputHeight = Math.max(1, Math.round(selection.height / displayedScale))
-    const dimensionError = validateImageDimensions(outputWidth, outputHeight)
+    const dimensionError = outputWidth * outputHeight > adaptiveMaxPixels
+      ? `Resolusi hasil crop melebihi budget memory ${Math.round(adaptiveMaxPixels / 1_000_000)} MP.`
+      : validateImageDimensions(outputWidth, outputHeight)
     if (dimensionError) throw new Error(dimensionError)
 
     const canvas = await selection.$toCanvas({ width: outputWidth, height: outputHeight })
@@ -426,6 +430,7 @@ async function downloadAll() {
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
               {{ items.length }}/{{ maxPngFiles }} file · otomatis dikonversi pada kualitas {{ quality }}%
             </p>
+            <p class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Batas adaptif perangkat: {{ Math.round(adaptiveMaxPixels / 1_000_000) }} MP per gambar</p>
           </label>
 
           <div v-if="errorMessage" role="alert" class="mt-4 flex items-start gap-3 rounded-2xl bg-rose-50 p-4 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
@@ -450,6 +455,7 @@ async function downloadAll() {
             <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" role="progressbar" :aria-valuenow="progressPercentage" aria-valuemin="0" aria-valuemax="100">
               <div class="h-full rounded-full bg-indigo-600 transition-[width] duration-300" :style="{ width: `${progressPercentage}%` }"></div>
             </div>
+            <button type="button" class="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-indigo-200 px-4 text-sm font-bold text-indigo-700 transition hover:bg-indigo-50 dark:border-indigo-500/30 dark:text-indigo-300 dark:hover:bg-indigo-500/10" @click="cancelConversion"><Icon icon="mdi:stop-circle-outline" class="size-5" /> Batalkan konversi</button>
           </div>
 
           <fieldset v-if="allFilesCompleted" class="mt-6 rounded-2xl border border-slate-200 p-4 dark:border-slate-700">

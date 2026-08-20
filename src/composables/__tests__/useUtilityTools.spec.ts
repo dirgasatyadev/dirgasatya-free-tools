@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { generateJwt } from '@/composables/useCryptoTools'
 import {
   analyzeText,
+  csvBlobToJson,
   csvToJson,
+  csvToJsonLines,
+  detectCsvDelimiter,
   dateToUnix,
   decodeBase64,
   decodeJwt,
@@ -14,6 +17,7 @@ import {
   generateUuidBatch,
   getJwtTimeStatus,
   jsonToCsv,
+  jsonLinesToCsv,
   minifyJson,
   parseUnixTimestamp,
   replaceRegex,
@@ -82,6 +86,31 @@ describe('utility tools', () => {
     expect(csv).toContain('"Dearga, Tools"')
     expect(csv).toContain('"a\nb"')
     expect(JSON.parse(csvToJson(csv))).toEqual([{ name: 'Dearga, Tools', note: 'a\nb' }])
+  })
+
+  it('mendeteksi delimiter, BOM, strict row, type inference, dan JSON Lines', () => {
+    const csv = '\uFEFFname;active;score\nDearga;true;10'
+    expect(detectCsvDelimiter(csv)).toBe(';')
+    expect(JSON.parse(csvToJson(csv, { delimiter: ';', inferTypes: true }))).toEqual([{ name: 'Dearga', active: true, score: 10 }])
+    expect(() => csvToJson('a,b\n1', { strict: true })).toThrow('seharusnya 2')
+    const jsonl = '{"name":"A"}\n{"name":"B"}'
+    expect(jsonLinesToCsv(jsonl, { delimiter: '|' })).toBe('name\nA\nB')
+    expect(csvToJsonLines('name\nA\nB')).toBe('{"name":"A"}\n{"name":"B"}')
+  })
+
+  it('memproses file CSV sebagai stream termasuk escaped quote lintas chunk', async () => {
+    const encoder = new TextEncoder()
+    const chunks = ['name,note\nDearga,"quoted "', '"value"', '""\n']
+    const streamedBlob = {
+      slice: () => new Blob(chunks),
+      stream: () => new ReadableStream({
+        start(controller) {
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk))
+          controller.close()
+        },
+      }),
+    } as Blob
+    await expect(csvBlobToJson(streamedBlob)).resolves.toBe('[\n  {"name":"Dearga","note":"quoted \\"value\\""}\n]')
   })
 
   it('membuat meta tag yang aman', () => {

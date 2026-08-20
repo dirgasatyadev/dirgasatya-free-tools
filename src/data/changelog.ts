@@ -2,6 +2,43 @@ import type { ChangelogEntry } from '@/type/changelog'
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.13.0',
+    date: '20 Agustus 2026',
+    title: 'Correctness, Platform & Product Quality',
+    description: 'Peningkatan correctness calculator/data, cron profesional, SEO route, CI, favicon, image pipeline, SVG, dan katalog.',
+    scope: 'Correctness & Platform',
+    icon: 'mdi:check-decagram-outline',
+    latest: true,
+    changes: [
+      { type: 'Peningkatan', text: 'Aspect Ratio Calculator memvalidasi dimensi pixel sebagai safe integer, mendukung rasio custom/desimal, lock ratio, hitung dua arah, dan preset cinematic.' },
+      { type: 'Peningkatan', text: 'XML ↔ JSON memakai AST preserve-order untuk mixed content, namespace, atribut, CDATA, komentar, processing instruction, dan repeated element.' },
+      { type: 'Peningkatan', text: 'Cron Builder menambahkan parser, validator tanpa silent clamping, list/alias/step-range, dialect Unix/GitHub/Quartz, timezone, dan lima preview eksekusi.' },
+      { type: 'Infrastruktur', text: 'GitHub Actions CI menjalankan npm ci, lint read-only, type-check, unit test sekali jalan, dan production build.' },
+      { type: 'Peningkatan', text: 'SEO route otomatis mencakup title, description, canonical, Open Graph, Twitter Card, JSON-LD, sitemap, robots, dan HTML prerender untuk seluruh route.' },
+      { type: 'Peningkatan', text: 'Favicon Generator menghasilkan ICO multi-size, SVG, ikon maskable, safe-zone preview, manifest purpose, HTML snippet, dan path aset custom dalam ZIP.' },
+      { type: 'Peningkatan', text: 'JSON ↔ CSV mendukung delimiter otomatis/custom, BOM, header, strict validation, column preview, type inference, JSON Lines, dan pembacaan file besar berbasis stream.' },
+      { type: 'Infrastruktur', text: 'SVG Maker dipisah menjadi canvas, toolbar, layer, pointer, selection, dan history modules dengan undo/redo serta keyboard shortcut.' },
+      { type: 'Infrastruktur', text: 'Shared image pipeline menyatukan batch progress, validation, decode, object URL, naming, dan worker client untuk tool gambar.' },
+      { type: 'Peningkatan', text: 'Kategori katalog dan beranda kini diturunkan otomatis dari tool yang benar-benar tersedia sehingga kategori kosong tidak tampil.' },
+    ],
+  },
+  {
+    version: 'v0.12.1',
+    date: '20 Agustus 2026',
+    title: 'Security & Performance Hardening',
+    description:
+      'Proteksi resource dan pemrosesan background untuk tool arsip, regex, serta gambar beresolusi tinggi.',
+    scope: 'Security & Performance',
+    icon: 'mdi:shield-check-outline',
+    changes: [
+      { type: 'Keamanan', text: 'ZIP Extractor memblokir entry berukuran atau berasio kompresi ekstrem, membatasi ukuran aktual, dan hanya mengekstrak file yang dipilih.' },
+      { type: 'Peningkatan', text: 'Regex Tester menjalankan RegExp di Web Worker dengan debounce, pembatalan job lama, dan timeout 500 ms.' },
+      { type: 'Peningkatan', text: 'Green Screen Remover memindahkan pemrosesan pixel ke Worker dan OffscreenCanvas dengan batas megapiksel adaptif berdasarkan memory perangkat.' },
+      { type: 'Peningkatan', text: 'PNG to AVIF menjalankan decode dan encoder WASM di Worker, memakai budget memory adaptif, serta menyediakan pembatalan konversi.' },
+      { type: 'Peningkatan', text: 'Compress Image memakai Web Worker, mendukung pembatalan, dan memisahkan kontrol kualitas encoder dari target ukuran file.' },
+    ],
+  },
+  {
     version: 'v0.12.0',
     date: '20 Agustus 2026',
     title: 'File, Data & Text Tools',
@@ -9,7 +46,6 @@ export const changelog: ChangelogEntry[] = [
       'Enam tool baru untuk arsip ZIP, konversi data terstruktur, penamaan developer, slug SEO, dan perbandingan teks.',
     scope: 'File, Data & Text Tools',
     icon: 'mdi:file-cog-outline',
-    latest: true,
     changes: [
       { type: 'Baru', text: 'ZIP Creator & Extractor membuat arsip multi-file dengan level kompresi dan mengekstrak entry ZIP untuk download.' },
       { type: 'Baru', text: 'YAML ↔ JSON Converter mendukung nested object, array, scalar, validasi, salin, dan download hasil.' },

@@ -24,6 +24,8 @@ import { useIncomingToolTransfer } from '@/composables/useToolTransfer'
 const {
   items,
   quality,
+  compressionMode,
+  targetSizeMb,
   isProcessing,
   isDragging,
   errorMessage,
@@ -34,6 +36,7 @@ const {
   hasProcessableItems,
   addFiles,
   processAll,
+  cancelProcessing,
   applyCrop,
   removeItem,
   reset,
@@ -351,6 +354,7 @@ onBeforeUnmount(() => {
             <div v-if="isProcessing" class="rounded-2xl bg-violet-50 p-4 dark:bg-violet-500/10">
               <div class="flex items-center justify-between text-sm font-bold text-violet-700 dark:text-violet-300"><span>Memproses otomatis {{ processedCount }} dari {{ items.length }}...</span><span>{{ progressPercentage }}%</span></div>
               <div class="mt-2 h-2 overflow-hidden rounded-full bg-violet-100 dark:bg-violet-950"><div class="h-full rounded-full bg-violet-600 transition-all" :style="{ width: `${progressPercentage}%` }"></div></div>
+              <button type="button" class="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-violet-300 px-4 text-sm font-bold text-violet-700 transition hover:bg-violet-100 dark:border-violet-500/40 dark:text-violet-300" @click="cancelProcessing"><Icon icon="mdi:stop-circle-outline" class="size-5" /> Batalkan proses</button>
             </div>
 
             <div class="mt-4 max-h-[48rem] space-y-3 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -392,9 +396,21 @@ onBeforeUnmount(() => {
         <aside class="space-y-5">
           <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div class="flex items-center gap-3"><span class="grid size-10 place-items-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><Icon icon="mdi:tune-variant" class="size-5" /></span><div><h2 class="font-black text-slate-950 dark:text-white">Pengaturan kompresi</h2><p class="text-xs font-semibold text-slate-500">Atur sebelum memilih file</p></div></div>
-            <div class="mt-5 flex items-center justify-between"><label for="compress-quality" class="text-sm font-bold">Kualitas</label><span class="rounded-lg bg-violet-50 px-2.5 py-1 text-sm font-black text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">{{ quality }}%</span></div>
-            <input id="compress-quality" v-model.number="quality" type="range" min="1" max="100" class="mt-3 w-full accent-violet-600" :disabled="items.length > 0" />
-            <p class="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">Nilai lebih rendah membuat file lebih kecil. Resolusi dipertahankan selama browser mendukungnya.</p>
+            <div class="mt-5 grid grid-cols-2 gap-2">
+              <button type="button" class="min-h-11 rounded-xl border px-3 text-sm font-bold transition" :class="compressionMode === 'quality' ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'" :disabled="items.length > 0" @click="compressionMode = 'quality'">Kualitas</button>
+              <button type="button" class="min-h-11 rounded-xl border px-3 text-sm font-bold transition" :class="compressionMode === 'target-size' ? 'border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'" :disabled="items.length > 0" @click="compressionMode = 'target-size'">Target ukuran</button>
+            </div>
+            <template v-if="compressionMode === 'quality'">
+              <div class="mt-5 flex items-center justify-between"><label for="compress-quality" class="text-sm font-bold">Kualitas encoder</label><span class="rounded-lg bg-violet-50 px-2.5 py-1 text-sm font-black text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">{{ quality }}%</span></div>
+              <input id="compress-quality" v-model.number="quality" type="range" min="1" max="100" class="mt-3 w-full accent-violet-600" :disabled="items.length > 0" />
+              <p class="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">Mengatur kualitas encoding tanpa menjanjikan ukuran file tertentu. Resolusi tetap dipertahankan.</p>
+            </template>
+            <template v-else>
+              <label for="compress-target-size" class="mt-5 block text-sm font-bold">Ukuran maksimum per file (MB)</label>
+              <input id="compress-target-size" v-model.number="targetSizeMb" type="number" min="0.01" max="25" step="0.1" class="mt-3 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-bold outline-none focus:border-violet-500 dark:border-slate-700 dark:bg-slate-950" :disabled="items.length > 0" />
+              <p class="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">Encoder mencoba mencapai batas ini dan dapat menurunkan resolusi bila diperlukan.</p>
+            </template>
+            <p class="mt-3 flex items-start gap-2 text-xs leading-5 text-emerald-700 dark:text-emerald-300"><Icon icon="mdi:memory" class="mt-0.5 size-4 shrink-0" /> Kompresi dijalankan melalui Web Worker agar UI tetap responsif.</p>
           </section>
           <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"><h2 class="flex items-center gap-2 font-black text-slate-950 dark:text-white"><Icon icon="mdi:information-outline" class="size-5 text-violet-600" /> Cara kerja</h2><ul class="mt-4 space-y-3 text-sm leading-6 text-slate-600 dark:text-slate-400"><li>Format asli dipertahankan saat kompresi.</li><li>Crop kotak mengikuti format asli.</li><li>Crop lingkaran otomatis menjadi PNG agar area luar tetap transparan.</li><li>Metadata gambar tidak ikut disimpan untuk mengurangi ukuran dan menjaga privasi.</li></ul></section>
         </aside>
