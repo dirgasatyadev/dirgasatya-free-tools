@@ -36,6 +36,15 @@ export function getAdaptiveCompressorPixelLimit(deviceMemoryGb = getDeviceMemory
   return 40_000_000
 }
 
+export function getAdaptiveImageTransformPixelLimit(deviceMemoryGb = getDeviceMemoryGb()) {
+  if (!deviceMemoryGb) return 20_000_000
+  if (deviceMemoryGb <= 2) return 8_000_000
+  if (deviceMemoryGb <= 4) return 14_000_000
+  if (deviceMemoryGb <= 8) return 24_000_000
+  if (deviceMemoryGb <= 16) return 32_000_000
+  return 40_000_000
+}
+
 export function estimateImageWorkingSet(width: number, height: number, bytesPerPixel = 24) {
   return Math.max(0, width) * Math.max(0, height) * bytesPerPixel
 }

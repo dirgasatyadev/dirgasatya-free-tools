@@ -15,6 +15,9 @@ export type ChangelogScope =
   | 'Correctness & Platform'
   | 'Reliability & Browser Testing'
   | 'Routing & Security'
+  | 'Image & JSON Tools'
+  | 'SVG & Code Tools'
+  | 'JSON Developer Tools'
 
 export interface ChangeItem {
   type: ChangeType

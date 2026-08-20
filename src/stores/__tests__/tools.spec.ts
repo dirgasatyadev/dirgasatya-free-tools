@@ -48,7 +48,7 @@ describe('tools store', () => {
   it('memfilter tool tanpa membedakan kapital', () => {
     const store = useToolsStore()
     store.query = 'avif'
-    expect(store.filteredTools.map((tool) => tool.name)).toEqual(['PNG to AVIF'])
+    expect(store.filteredTools.map((tool) => tool.name)).toEqual(['PNG to AVIF', 'Image Resizer & Cropper', 'Universal Image Converter'])
   })
 
   it('menghasilkan daftar kosong untuk pencarian yang tidak cocok', () => {
@@ -61,7 +61,7 @@ describe('tools store', () => {
     const store = useToolsStore()
     store.selectedCategory = 'Image'
 
-    expect(store.filteredTools).toHaveLength(4)
+    expect(store.filteredTools).toHaveLength(6)
     expect(store.filteredTools.every((tool) => tool.category === 'Image')).toBe(true)
   })
 
@@ -77,7 +77,7 @@ describe('tools store', () => {
     store.selectedCategory = 'Image'
     store.query = 'avif'
 
-    expect(store.filteredTools.map((tool) => tool.name)).toEqual(['PNG to AVIF'])
+    expect(store.filteredTools.map((tool) => tool.name)).toEqual(['PNG to AVIF', 'Image Resizer & Cropper', 'Universal Image Converter'])
   })
 
   it('mereset seluruh filter', () => {

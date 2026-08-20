@@ -16,7 +16,7 @@ describe('tool transfer helpers', () => {
       { blob: new Blob(['avif'], { type: 'image/avif' }), fileName: 'hasil.avif' },
     ])
 
-    expect(targets.map((tool) => tool.toolKey)).toEqual(['green-screen-remover'])
+    expect(targets.map((tool) => tool.toolKey)).toEqual(['green-screen-remover', 'image-resizer-cropper', 'universal-image-converter'])
   })
 
   it('menghubungkan hasil WebP ke Green Screen Remover', () => {
@@ -27,6 +27,8 @@ describe('tool transfer helpers', () => {
     expect(targets.map((tool) => tool.toolKey)).toEqual([
       'green-screen-remover',
       'compress-image',
+      'image-resizer-cropper',
+      'universal-image-converter',
     ])
   })
 
@@ -40,6 +42,8 @@ describe('tool transfer helpers', () => {
       'png-to-webp',
       'compress-image',
       'favicon-generator',
+      'image-resizer-cropper',
+      'universal-image-converter',
     ])
   })
 
@@ -49,6 +53,6 @@ describe('tool transfer helpers', () => {
       { blob: new Blob(['jpg'], { type: 'image/jpeg' }), fileName: 'dua.jpg' },
     ])
 
-    expect(targets.map((tool) => tool.toolKey)).toEqual(['green-screen-remover'])
+    expect(targets.map((tool) => tool.toolKey)).toEqual(['green-screen-remover', 'image-resizer-cropper', 'universal-image-converter'])
   })
 })

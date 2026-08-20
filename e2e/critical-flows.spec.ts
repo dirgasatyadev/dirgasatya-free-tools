@@ -1,20 +1,20 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 
-async function uploadPng(page: Page, path: string, expectedText: string, fileCount = 1) {
+async function uploadPng(page: Page, path: string, expectedText: string, fileCount = 1, width = 4, height = 4) {
   await page.goto(path)
-  const dataUrl = await page.evaluate(() => {
+  const dataUrl = await page.evaluate(({ width, height }) => {
     const canvas = document.createElement('canvas')
-    canvas.width = 4
-    canvas.height = 4
+    canvas.width = width
+    canvas.height = height
     const context = canvas.getContext('2d')!
     context.fillStyle = '#00ff00'
-    context.fillRect(0, 0, 4, 4)
+    context.fillRect(0, 0, width, height)
     return canvas.toDataURL('image/png')
-  })
+  }, { width, height })
   const png = Buffer.from(dataUrl.split(',')[1]!, 'base64')
   await page.locator('input[type="file"]').first().setInputFiles(Array.from({ length: fileCount }, (_, index) => ({ name: `smoke-${index + 1}.png`, mimeType: 'image/png', buffer: png })))
-  await expect(page.getByText(expectedText, { exact: false })).toBeVisible({ timeout: 90_000 })
+  if (expectedText) await expect(page.getByText(expectedText, { exact: false })).toBeVisible({ timeout: 90_000 })
 }
 
 test('homepage dan katalog dapat dimuat', async ({ page }) => {
@@ -95,4 +95,83 @@ test('Bcrypt worker membuat hash dan menolak cost eksternal di luar budget', asy
   await page.getByLabel('Encoded hash Bcrypt').fill(`$2b$15$${'a'.repeat(53)}`)
   await page.getByRole('button', { name: 'Verifikasi password' }).click()
   await expect(page.getByRole('alert')).toContainText('antara 4 dan 14')
+})
+
+test('Image Resizer memproses batch lewat shared worker', async ({ page }) => {
+  await uploadPng(page, '/tools/image-resizer-cropper', '', 2, 128, 96)
+  await page.getByRole('button', { name: 'Crop', exact: true }).first().click()
+  await expect(page.getByRole('heading', { name: 'Crop image' })).toBeVisible()
+  await page.getByRole('button', { name: 'Terapkan crop' }).click()
+  await expect(page.getByText(/Crop \d+×\d+/)).toBeVisible()
+  await page.getByRole('button', { name: 'Resize semua gambar' }).click()
+  await expect(page.getByText('Output 1920×1080', { exact: false })).toHaveCount(2, { timeout: 90_000 })
+  await expect(page.getByRole('button', { name: 'Download semua sebagai ZIP' })).toBeVisible()
+})
+
+test('Universal Image Converter menghasilkan JPEG dari PNG', async ({ page }) => {
+  await page.goto('/tools/universal-image-converter')
+  const dataUrl = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 4; canvas.height = 4; canvas.getContext('2d')!.fillRect(0, 0, 4, 4); return canvas.toDataURL('image/png') })
+  await page.locator('input[type="file"]').first().setInputFiles({ name: 'universal.png', mimeType: 'image/png', buffer: Buffer.from(dataUrl.split(',')[1]!, 'base64') })
+  await page.getByText('JPEG', { exact: true }).click()
+  await page.getByRole('button', { name: 'Konversi semua gambar' }).click()
+  await expect(page.getByText('Output 4×4', { exact: false })).toBeVisible({ timeout: 90_000 })
+  await expect(page.getByRole('button', { name: 'Download', exact: true })).toBeVisible()
+})
+
+test('JSON Explorer menjalankan JSONPath dan menampilkan tree', async ({ page }) => {
+  await page.goto('/tools/json-explorer-jsonpath')
+  await expect(page.getByText('Tree explorer', { exact: false })).toBeVisible()
+  await page.getByRole('button', { name: 'Run JSONPath' }).click()
+  await expect(page.getByText('2 hasil', { exact: true })).toBeVisible()
+  await expect(page.getByTestId('jsonpath-result-json')).toContainText('a@example.com')
+  await expect(page.getByTestId('jsonpath-result-json')).toContainText('b@example.com')
+  await expect(page.getByTestId('jsonpath-result-json')).not.toContainText('c@example.com')
+})
+
+test('JSON ke TypeScript menginfer nested interface dan opsi output', async ({ page }) => {
+  await page.goto('/tools/json-to-typescript-generator')
+  await expect(page.getByRole('heading', { name: 'JSON → TypeScript Generator' })).toBeVisible()
+  const output = page.locator('textarea[readonly]')
+  await expect(output).toHaveValue(/export interface Root/)
+  await expect(output).toHaveValue(/roles: string\[\]/)
+  await expect(output).toHaveValue(/profile: Profile/)
+  await page.getByLabel('Root type name').fill('API response')
+  await page.getByText('Type', { exact: true }).click()
+  await page.getByText('Optional fields', { exact: true }).click()
+  await page.getByText('Readonly properties', { exact: true }).click()
+  await page.getByRole('button', { name: 'Generate TypeScript' }).click()
+  await expect(output).toHaveValue(/export type APIResponse/)
+  await expect(output).toHaveValue(/readonly id\?: number/)
+})
+
+test('SVG Optimizer memvalidasi, mengoptimasi, dan export PNG', async ({ page }) => {
+  await page.goto('/tools/svg-optimizer-converter')
+  await expect(page.getByRole('heading', { name: 'SVG Optimizer & Converter' })).toBeVisible()
+  await page.getByRole('button', { name: 'Optimize SVG' }).click()
+  await expect(page.getByRole('heading', { name: 'Optimized SVG' })).toBeVisible()
+  const optimized = await page.locator('textarea[readonly]').inputValue()
+  expect(optimized).not.toContain('<metadata>')
+  expect(optimized).not.toContain('Exported from')
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export PNG' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/\.png$/)
+})
+
+test('Code Formatter memakai shared engine dan route SEO bahasa', async ({ page }) => {
+  await page.goto('/tools/html-formatter')
+  await expect(page).toHaveTitle('HTML Formatter & Minifier - Dearga Free Tools')
+  await page.getByRole('button', { name: 'Minify' }).click()
+  await expect(page.locator('textarea[readonly]')).not.toHaveValue('', { timeout: 30_000 })
+  expect(await page.locator('textarea[readonly]').inputValue()).not.toContain('\n')
+
+  await page.getByRole('link', { name: 'TypeScript' }).click()
+  await page.getByRole('button', { name: 'Minify' }).click()
+  await expect(page.locator('textarea[readonly]')).not.toHaveValue('', { timeout: 30_000 })
+  const typescriptOutput = await page.locator('textarea[readonly]').inputValue()
+  expect(typescriptOutput).not.toContain('interface Tool')
+
+  await page.getByRole('link', { name: 'SQL' }).click()
+  await page.getByRole('button', { name: 'Beautify' }).click()
+  await expect(page.locator('textarea[readonly]')).toHaveValue(/SELECT/, { timeout: 30_000 })
 })

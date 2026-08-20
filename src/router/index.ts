@@ -1,6 +1,7 @@
 import { toolRegistry } from '@/data/tools'
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { toolSeoTitle, updateRouteSeo } from '@/composables/useRouteSeo'
+import { codeFormatterAliases } from '@/data/toolAliases'
 
 const toolRoutes: RouteRecordRaw[] = toolRegistry.map((tool) => ({
   path: tool.path,
@@ -8,6 +9,14 @@ const toolRoutes: RouteRecordRaw[] = toolRegistry.map((tool) => ({
   component: tool.component,
   meta: { seoTitle: toolSeoTitle(tool.name), seoDescription: tool.description, applicationName: tool.name },
   ...(tool.routeProps ? { props: tool.routeProps } : {}),
+}))
+
+const aliasRoutes: RouteRecordRaw[] = codeFormatterAliases.map((route) => ({
+  path: route.path,
+  name: route.name,
+  component: () => import('@/pages/CodeFormatterPage.vue'),
+  props: { initialLanguage: route.language },
+  meta: { seoTitle: route.title, seoDescription: route.description, applicationName: route.title },
 }))
 
 const router = createRouter({
@@ -38,6 +47,7 @@ const router = createRouter({
       meta: { seoTitle: 'Changelog', seoDescription: 'Riwayat fitur, peningkatan, keamanan, dan perubahan Dearga Free Tools.' },
     },
     ...toolRoutes,
+    ...aliasRoutes,
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',

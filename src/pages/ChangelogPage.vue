@@ -35,6 +35,12 @@ const scopeClasses: Record<ChangelogScope, string> = {
     'bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300',
   'Routing & Security':
     'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+  'Image & JSON Tools':
+    'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
+  'SVG & Code Tools':
+    'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300',
+  'JSON Developer Tools':
+    'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
 }
 </script>
 

@@ -7,20 +7,29 @@ const distRoot = new URL('../dist/', import.meta.url)
 const distPath = fileURLToPath(distRoot)
 const source = await readFile(new URL('../src/data/tools.ts', import.meta.url), 'utf8')
 const sourceFile = ts.createSourceFile('tools.ts', source, ts.ScriptTarget.Latest, true)
+const aliasSource = await readFile(new URL('../src/data/toolAliases.ts', import.meta.url), 'utf8')
+const aliasSourceFile = ts.createSourceFile('toolAliases.ts', aliasSource, ts.ScriptTarget.Latest, true)
 
-function propertyText(object, name) {
-  const property = object.properties.find((item) => ts.isPropertyAssignment(item) && item.name.getText(sourceFile).replaceAll(/["']/g, '') === name)
+function propertyText(object, name, file = sourceFile) {
+  const property = object.properties.find((item) => ts.isPropertyAssignment(item) && item.name.getText(file).replaceAll(/["']/g, '') === name)
   return property && ts.isPropertyAssignment(property) && ts.isStringLiteralLike(property.initializer) ? property.initializer.text : ''
 }
 
-let registry
-sourceFile.forEachChild((node) => {
-  if (!ts.isVariableStatement(node)) return
-  for (const declaration of node.declarationList.declarations) {
-    if (declaration.name.getText(sourceFile) === 'toolRegistry' && declaration.initializer && ts.isArrayLiteralExpression(declaration.initializer)) registry = declaration.initializer
-  }
-})
+function findArray(file, variableName) {
+  let array
+  file.forEachChild((node) => {
+    if (!ts.isVariableStatement(node)) return
+    for (const declaration of node.declarationList.declarations) {
+      if (declaration.name.getText(file) === variableName && declaration.initializer && ts.isArrayLiteralExpression(declaration.initializer)) array = declaration.initializer
+    }
+  })
+  return array
+}
+
+const registry = findArray(sourceFile, 'toolRegistry')
 if (!registry) throw new Error('toolRegistry tidak ditemukan untuk generator SEO.')
+const aliasRegistry = findArray(aliasSourceFile, 'codeFormatterAliases')
+if (!aliasRegistry) throw new Error('codeFormatterAliases tidak ditemukan untuk generator SEO.')
 
 function seoTitle(name) {
   if (name === 'Green Screen Remover') return 'Free Online Green Screen Remover'
@@ -33,6 +42,13 @@ const tools = registry.elements.filter(ts.isObjectLiteralExpression).map((object
   description: propertyText(object, 'description'),
   path: propertyText(object, 'path'),
 })).filter((tool) => tool.name && tool.description && tool.path)
+const aliases = aliasRegistry.elements.filter(ts.isObjectLiteralExpression).map((object) => ({
+  name: propertyText(object, 'title', aliasSourceFile),
+  title: propertyText(object, 'title', aliasSourceFile),
+  description: propertyText(object, 'description', aliasSourceFile),
+  path: propertyText(object, 'path', aliasSourceFile),
+  applicationName: propertyText(object, 'title', aliasSourceFile),
+})).filter((route) => route.title && route.description && route.path)
 
 const routes = [
   { path: '/', title: 'Dearga Free Tools', description: 'Kumpulan free tool praktis untuk developer, kreator, dan pekerja digital.' },
@@ -40,6 +56,7 @@ const routes = [
   { path: '/about', title: 'About', description: 'Tentang Dearga Free Tools dan prinsip pemrosesan data secara lokal di browser.' },
   { path: '/changelog', title: 'Changelog', description: 'Riwayat fitur, peningkatan, keamanan, dan perubahan Dearga Free Tools.' },
   ...tools.map((tool) => ({ ...tool, title: seoTitle(tool.name), applicationName: tool.name })),
+  ...aliases,
 ]
 const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://tools.dirgasatya.com').replace(/\/$/, '')
 const template = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8')
