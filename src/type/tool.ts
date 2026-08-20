@@ -1,3 +1,5 @@
+import type { Component } from 'vue'
+
 export type ToolCategory =
   | 'Developer'
   | 'Text'
@@ -24,4 +26,9 @@ export interface FreeTool {
   path: string
   inputMimeTypes: string[]
   status: 'available' | 'coming-soon'
+}
+
+export interface RegisteredTool extends FreeTool {
+  component: () => Promise<{ default: Component }>
+  routeProps?: Record<string, unknown>
 }

@@ -1,4 +1,4 @@
-import type { FreeTool, ToolCategory } from '@/type/tool'
+import type { FreeTool, RegisteredTool, ToolCategory } from '@/type/tool'
 
 export const toolCategories: ToolCategory[] = [
   'Developer',
@@ -15,7 +15,7 @@ export const toolCategories: ToolCategory[] = [
   'Data',
 ]
 
-export const tools: FreeTool[] = [
+export const toolRegistry: RegisteredTool[] = [
   {
     id: 1,
     toolKey: 'png-to-avif',
@@ -24,6 +24,7 @@ export const tools: FreeTool[] = [
     category: 'Image',
     icon: 'mdi:image-sync-outline',
     path: '/tools/png-to-avif',
+    component: () => import('@/pages/PNGToAvifPage.vue'),
     inputMimeTypes: ['image/png'],
     status: 'available',
   },
@@ -35,6 +36,7 @@ export const tools: FreeTool[] = [
     category: 'Image',
     icon: 'mdi:account-box-outline',
     path: '/tools/green-screen-remover',
+    component: () => import('@/pages/GreenScreenRemoverPage.vue'),
     inputMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/avif'],
     status: 'available',
   },
@@ -46,6 +48,8 @@ export const tools: FreeTool[] = [
     category: 'Security & Privacy',
     icon: 'mdi:shield-key-outline',
     path: '/tools/bcrypt-encoder-decoder',
+    component: () => import('@/pages/PasswordHashPage.vue'),
+    routeProps: { algorithm: 'bcrypt' },
     inputMimeTypes: [],
     status: 'available',
   },
@@ -57,6 +61,8 @@ export const tools: FreeTool[] = [
     category: 'Security & Privacy',
     icon: 'mdi:shield-lock-outline',
     path: '/tools/argon2id-encoder-decoder',
+    component: () => import('@/pages/PasswordHashPage.vue'),
+    routeProps: { algorithm: 'argon2id' },
     inputMimeTypes: [],
     status: 'available',
   },
@@ -64,22 +70,26 @@ export const tools: FreeTool[] = [
     id: 5,
     toolKey: 'sha-256-generator',
     name: 'SHA-256 Generator',
-    description: 'Hasilkan digest SHA-256 dari teks menggunakan Web Crypto API.',
+    description: 'Hitung dan verifikasi checksum SHA-256 dari teks atau file langsung di browser.',
     category: 'Security & Privacy',
     icon: 'mdi:fingerprint',
     path: '/tools/sha-256-generator',
-    inputMimeTypes: [],
+    component: () => import('@/pages/HashGeneratorPage.vue'),
+    routeProps: { algorithm: 'SHA-256' },
+    inputMimeTypes: ['*/*'],
     status: 'available',
   },
   {
     id: 6,
     toolKey: 'sha-512-generator',
     name: 'SHA-512 Generator',
-    description: 'Hasilkan digest SHA-512 dari teks secara lokal dan otomatis.',
+    description: 'Hitung dan verifikasi checksum SHA-512 dari teks atau file langsung di browser.',
     category: 'Security & Privacy',
     icon: 'mdi:fingerprint',
     path: '/tools/sha-512-generator',
-    inputMimeTypes: [],
+    component: () => import('@/pages/HashGeneratorPage.vue'),
+    routeProps: { algorithm: 'SHA-512' },
+    inputMimeTypes: ['*/*'],
     status: 'available',
   },
   {
@@ -90,6 +100,7 @@ export const tools: FreeTool[] = [
     category: 'Developer',
     icon: 'mdi:key-chain-variant',
     path: '/tools/jwt-generator',
+    component: () => import('@/pages/JwtGeneratorPage.vue'),
     inputMimeTypes: [],
     status: 'available',
   },
@@ -101,6 +112,7 @@ export const tools: FreeTool[] = [
     category: 'Image',
     icon: 'mdi:image-sync-outline',
     path: '/tools/png-to-webp',
+    component: () => import('@/pages/PNGToWebpPage.vue'),
     inputMimeTypes: ['image/png'],
     status: 'available',
   },
@@ -112,6 +124,7 @@ export const tools: FreeTool[] = [
     category: 'Image',
     icon: 'mdi:image-size-select-small',
     path: '/tools/compress-image',
+    component: () => import('@/pages/CompressImagePage.vue'),
     inputMimeTypes: ['image/png', 'image/webp', 'image/jpeg'],
     status: 'available',
   },
@@ -123,6 +136,7 @@ export const tools: FreeTool[] = [
     category: 'Design',
     icon: 'mdi:svg',
     path: '/tools/svg-maker',
+    component: () => import('@/pages/SvgMakerPage.vue'),
     inputMimeTypes: [],
     status: 'available',
   },
@@ -134,17 +148,36 @@ export const tools: FreeTool[] = [
     category: 'Design',
     icon: 'mdi:web-box',
     path: '/tools/favicon-generator',
+    component: () => import('@/pages/FaviconGeneratorPage.vue'),
     inputMimeTypes: ['image/png'],
     status: 'available',
   },
-  { id: 12, toolKey: 'json-formatter-validator', name: 'JSON Formatter & Validator', description: 'Format, minify, dan validasi JSON langsung di browser.', category: 'Developer', icon: 'mdi:code-json', path: '/tools/json-formatter-validator', inputMimeTypes: [], status: 'available' },
-  { id: 13, toolKey: 'base64-encoder-decoder', name: 'Base64 Encoder & Decoder', description: 'Encode dan decode teks UTF-8 ke Base64 secara lokal.', category: 'Developer', icon: 'mdi:file-code-outline', path: '/tools/base64-encoder-decoder', inputMimeTypes: [], status: 'available' },
-  { id: 14, toolKey: 'url-encoder-decoder', name: 'URL Encoder & Decoder', description: 'Encode dan decode URL lengkap atau komponennya.', category: 'Developer', icon: 'mdi:link-variant', path: '/tools/url-encoder-decoder', inputMimeTypes: [], status: 'available' },
-  { id: 15, toolKey: 'uuid-generator', name: 'UUID Generator', description: 'Buat hingga 100 UUID versi 4 menggunakan random kriptografis.', category: 'Developer', icon: 'mdi:identifier', path: '/tools/uuid-generator', inputMimeTypes: [], status: 'available' },
-  { id: 16, toolKey: 'jwt-decoder-verifier', name: 'JWT Decoder & Verifier', description: 'Decode JWT dan verifikasi signature HMAC HS256, HS384, atau HS512.', category: 'Security & Privacy', icon: 'mdi:key-chain', path: '/tools/jwt-decoder-verifier', inputMimeTypes: [], status: 'available' },
-  { id: 17, toolKey: 'regex-tester', name: 'Regex Tester', description: 'Uji JavaScript RegExp, capture group, dan preview replace.', category: 'Developer', icon: 'mdi:regex', path: '/tools/regex-tester', inputMimeTypes: [], status: 'available' },
-  { id: 18, toolKey: 'unix-timestamp-converter', name: 'Unix Timestamp Converter', description: 'Konversi timestamp detik atau milidetik ke tanggal dan sebaliknya.', category: 'Developer', icon: 'mdi:clock-convert-outline', path: '/tools/unix-timestamp-converter', inputMimeTypes: [], status: 'available' },
-  { id: 19, toolKey: 'word-counter', name: 'Word Counter', description: 'Hitung kata, karakter, kalimat, paragraf, baris, dan waktu baca.', category: 'Text', icon: 'mdi:counter', path: '/tools/word-counter', inputMimeTypes: [], status: 'available' },
-  { id: 20, toolKey: 'json-csv-converter', name: 'JSON ↔ CSV Converter', description: 'Konversikan JSON menjadi CSV dan CSV kembali menjadi JSON.', category: 'Data', icon: 'mdi:file-swap-outline', path: '/tools/json-csv-converter', inputMimeTypes: [], status: 'available' },
-  { id: 21, toolKey: 'meta-tag-generator', name: 'Meta Tag Generator', description: 'Buat meta tag SEO, Open Graph, dan Twitter Card siap pakai.', category: 'Web', icon: 'mdi:tag-text-outline', path: '/tools/meta-tag-generator', inputMimeTypes: [], status: 'available' },
+  { id: 12, toolKey: 'json-formatter-validator', name: 'JSON Formatter & Validator', description: 'Format, minify, dan validasi JSON langsung di browser.', category: 'Developer', icon: 'mdi:code-json', path: '/tools/json-formatter-validator', inputMimeTypes: [], status: 'available', component: () => import('@/pages/JsonFormatterPage.vue') },
+  { id: 13, toolKey: 'base64-encoder-decoder', name: 'Base64 Encoder & Decoder', description: 'Encode dan decode teks UTF-8 ke Base64 secara lokal.', category: 'Developer', icon: 'mdi:file-code-outline', path: '/tools/base64-encoder-decoder', inputMimeTypes: [], status: 'available', component: () => import('@/pages/TextEncoderDecoderPage.vue'), routeProps: { type: 'base64' } },
+  { id: 14, toolKey: 'url-encoder-decoder', name: 'URL Encoder & Decoder', description: 'Encode dan decode URL lengkap atau komponennya.', category: 'Developer', icon: 'mdi:link-variant', path: '/tools/url-encoder-decoder', inputMimeTypes: [], status: 'available', component: () => import('@/pages/TextEncoderDecoderPage.vue'), routeProps: { type: 'url' } },
+  { id: 15, toolKey: 'uuid-generator', name: 'UUID Generator', description: 'Buat hingga 100 UUID versi 4 menggunakan random kriptografis.', category: 'Developer', icon: 'mdi:identifier', path: '/tools/uuid-generator', inputMimeTypes: [], status: 'available', component: () => import('@/pages/UuidGeneratorPage.vue') },
+  { id: 16, toolKey: 'jwt-decoder-verifier', name: 'JWT Decoder & Verifier', description: 'Decode JWT dan verifikasi signature HMAC HS256, HS384, atau HS512.', category: 'Security & Privacy', icon: 'mdi:key-chain', path: '/tools/jwt-decoder-verifier', inputMimeTypes: [], status: 'available', component: () => import('@/pages/JwtDecoderPage.vue') },
+  { id: 17, toolKey: 'regex-tester', name: 'Regex Tester', description: 'Uji JavaScript RegExp, capture group, dan preview replace.', category: 'Developer', icon: 'mdi:regex', path: '/tools/regex-tester', inputMimeTypes: [], status: 'available', component: () => import('@/pages/RegexTesterPage.vue') },
+  { id: 18, toolKey: 'unix-timestamp-converter', name: 'Unix Timestamp Converter', description: 'Konversi timestamp detik atau milidetik ke tanggal dan sebaliknya.', category: 'Developer', icon: 'mdi:clock-convert-outline', path: '/tools/unix-timestamp-converter', inputMimeTypes: [], status: 'available', component: () => import('@/pages/UnixTimestampPage.vue') },
+  { id: 19, toolKey: 'word-counter', name: 'Word Counter', description: 'Hitung kata, karakter, kalimat, paragraf, baris, dan waktu baca.', category: 'Text', icon: 'mdi:counter', path: '/tools/word-counter', inputMimeTypes: [], status: 'available', component: () => import('@/pages/WordCounterPage.vue') },
+  { id: 20, toolKey: 'json-csv-converter', name: 'JSON ↔ CSV Converter', description: 'Konversikan JSON menjadi CSV dan CSV kembali menjadi JSON.', category: 'Data', icon: 'mdi:file-swap-outline', path: '/tools/json-csv-converter', inputMimeTypes: [], status: 'available', component: () => import('@/pages/JsonCsvConverterPage.vue') },
+  { id: 21, toolKey: 'meta-tag-generator', name: 'Meta Tag Generator', description: 'Buat meta tag SEO, Open Graph, dan Twitter Card siap pakai.', category: 'Web', icon: 'mdi:tag-text-outline', path: '/tools/meta-tag-generator', inputMimeTypes: [], status: 'available', component: () => import('@/pages/MetaTagGeneratorPage.vue') },
+  { id: 22, toolKey: 'sha-384-generator', name: 'SHA-384 Generator', description: 'Hitung dan verifikasi checksum SHA-384 dari teks atau file langsung di browser.', category: 'Security & Privacy', icon: 'mdi:fingerprint', path: '/tools/sha-384-generator', inputMimeTypes: ['*/*'], status: 'available', component: () => import('@/pages/HashGeneratorPage.vue'), routeProps: { algorithm: 'SHA-384' } },
+  { id: 23, toolKey: 'md5-generator', name: 'MD5 Generator', description: 'Hitung dan verifikasi checksum MD5 dari teks atau file untuk pemeriksaan integritas.', category: 'Security & Privacy', icon: 'mdi:fingerprint', path: '/tools/md5-generator', inputMimeTypes: ['*/*'], status: 'available', component: () => import('@/pages/HashGeneratorPage.vue'), routeProps: { algorithm: 'MD5' } },
 ]
+
+function toCatalogTool(tool: RegisteredTool): FreeTool {
+  return {
+    id: tool.id,
+    toolKey: tool.toolKey,
+    name: tool.name,
+    description: tool.description,
+    category: tool.category,
+    icon: tool.icon,
+    path: tool.path,
+    inputMimeTypes: tool.inputMimeTypes,
+    status: tool.status,
+  }
+}
+
+export const tools: FreeTool[] = toolRegistry.map(toCatalogTool)

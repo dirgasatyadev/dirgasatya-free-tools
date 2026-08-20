@@ -29,7 +29,7 @@ describe('tools store', () => {
       'JSON Formatter & Validator',
     ])
     expect(store.hasMore).toBe(true)
-    expect(store.remainingCount).toBe(9)
+    expect(store.remainingCount).toBe(tools.length - 12)
   })
 
   it('menambah tool berikutnya melalui lazy load', () => {
@@ -37,7 +37,7 @@ describe('tools store', () => {
 
     store.loadMore()
 
-    expect(store.visibleTools).toHaveLength(21)
+    expect(store.visibleTools).toHaveLength(tools.length)
     expect(store.hasMore).toBe(false)
     expect(store.remainingCount).toBe(0)
   })

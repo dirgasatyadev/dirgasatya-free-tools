@@ -1,5 +1,5 @@
 export type PasswordHashAlgorithm = 'bcrypt' | 'argon2id'
-export type DigestAlgorithm = 'SHA-256' | 'SHA-512'
+export type DigestAlgorithm = 'MD5' | 'SHA-256' | 'SHA-384' | 'SHA-512'
 export type JwtAlgorithm = 'HS256' | 'HS384' | 'HS512'
 
 export interface Argon2idHashOptions {
@@ -91,8 +91,38 @@ export async function verifyArgon2id(password: string, hash: string) {
 
 export async function digestText(value: string, algorithm: DigestAlgorithm) {
   const data = new TextEncoder().encode(value)
+  if (algorithm === 'MD5') {
+    const { md5 } = await import('hash-wasm')
+    return md5(data)
+  }
   const digest = await crypto.subtle.digest(algorithm, data)
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+export async function digestFile(
+  file: Blob,
+  algorithm: DigestAlgorithm,
+  onProgress?: (progress: number) => void,
+) {
+  const { createMD5, createSHA256, createSHA384, createSHA512 } = await import('hash-wasm')
+  const factories = {
+    MD5: createMD5,
+    'SHA-256': createSHA256,
+    'SHA-384': createSHA384,
+    'SHA-512': createSHA512,
+  } satisfies Record<DigestAlgorithm, () => ReturnType<typeof createMD5>>
+  const hasher = await factories[algorithm]()
+  const chunkSize = 4 * 1024 * 1024
+
+  hasher.init()
+  onProgress?.(file.size === 0 ? 1 : 0)
+  for (let offset = 0; offset < file.size; offset += chunkSize) {
+    const chunk = await file.slice(offset, Math.min(offset + chunkSize, file.size)).arrayBuffer()
+    hasher.update(new Uint8Array(chunk))
+    onProgress?.(Math.min(1, (offset + chunk.byteLength) / file.size))
+  }
+
+  return hasher.digest('hex')
 }
 
 export function parseJsonObject(value: string, label: string) {
