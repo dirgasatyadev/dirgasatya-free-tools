@@ -2,6 +2,25 @@ import type { ChangelogEntry } from '@/type/changelog'
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.12.0',
+    date: '20 Agustus 2026',
+    title: 'File, Data & Text Tools',
+    description:
+      'Enam tool baru untuk arsip ZIP, konversi data terstruktur, penamaan developer, slug SEO, dan perbandingan teks.',
+    scope: 'File, Data & Text Tools',
+    icon: 'mdi:file-cog-outline',
+    latest: true,
+    changes: [
+      { type: 'Baru', text: 'ZIP Creator & Extractor membuat arsip multi-file dengan level kompresi dan mengekstrak entry ZIP untuk download.' },
+      { type: 'Baru', text: 'YAML ↔ JSON Converter mendukung nested object, array, scalar, validasi, salin, dan download hasil.' },
+      { type: 'Baru', text: 'XML ↔ JSON Converter mempertahankan atribut, text node, dan elemen berulang dalam struktur JSON.' },
+      { type: 'Baru', text: 'Case Converter menghasilkan camelCase, PascalCase, snake_case, kebab-case, dan CONSTANT_CASE sekaligus.' },
+      { type: 'Baru', text: 'Slug Generator membuat URL slug ramah CMS dan SEO dengan separator serta panjang maksimal yang dapat diatur.' },
+      { type: 'Baru', text: 'Text Diff Checker membandingkan maksimal 1.000 baris per sisi dengan tampilan side-by-side dan highlight added, deleted, serta changed.' },
+      { type: 'Keamanan', text: 'Arsip dan data diproses lokal di browser tanpa upload ke server.' },
+    ],
+  },
+  {
     version: 'v0.11.0',
     date: '20 Agustus 2026',
     title: 'Calculator, Cron & Checksum Tools',
@@ -9,7 +28,6 @@ export const changelog: ChangelogEntry[] = [
       'Sepuluh tool dan peningkatan baru untuk perhitungan web, ukuran file, jaringan, penjadwalan cron, dan verifikasi checksum.',
     scope: 'Calculator, Cron & Checksum Tools',
     icon: 'mdi:calculator-variant-outline',
-    latest: true,
     changes: [
       { type: 'Baru', text: 'PX ↔ REM Converter mengonversi unit CSS dua arah dengan root font size yang dapat disesuaikan.' },
       { type: 'Baru', text: 'Aspect Ratio Calculator menghitung rasio sederhana dan ukuran target yang tetap proporsional.' },

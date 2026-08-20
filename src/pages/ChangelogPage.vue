@@ -25,6 +25,8 @@ const scopeClasses: Record<ChangelogScope, string> = {
     'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
   'Calculator, Cron & Checksum Tools':
     'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+  'File, Data & Text Tools':
+    'bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300',
 }
 </script>
 

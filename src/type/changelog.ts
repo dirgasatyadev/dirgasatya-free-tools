@@ -10,6 +10,7 @@ export type ChangelogScope =
   | 'Developer, Text & Data Tools'
   | 'Security & Developer'
   | 'Calculator, Cron & Checksum Tools'
+  | 'File, Data & Text Tools'
 
 export interface ChangeItem {
   type: ChangeType
