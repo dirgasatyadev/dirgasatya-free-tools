@@ -54,6 +54,21 @@ const history = useSvgHistory(
   () => ({ width: width.value, height: height.value, background: background.value, transparentBackground: transparentBackground.value, elements: structuredClone(elements.value), selectedId: selectedId.value }),
   (snapshot) => { width.value = snapshot.width; height.value = snapshot.height; background.value = snapshot.background; transparentBackground.value = snapshot.transparentBackground; elements.value = snapshot.elements; selectedId.value = snapshot.selectedId },
 )
+let inspectorTransactionActive = false
+
+function isInspectorControl(event: Event) {
+  return event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement
+}
+
+function beginInspectorTransaction(event: Event) {
+  if (!isInspectorControl(event) || inspectorTransactionActive) return
+  history.checkpoint()
+  inspectorTransactionActive = true
+}
+
+function endInspectorTransaction(event: Event) {
+  if (isInspectorControl(event)) inspectorTransactionActive = false
+}
 
 function addElement(type: Parameters<typeof addElementBase>[0]) { history.checkpoint(); addElementBase(type) }
 function addPathPreset(preset: Parameters<typeof addPathPresetBase>[0]) { history.checkpoint(); addPathPresetBase(preset) }
@@ -324,7 +339,7 @@ onBeforeUnmount(() => {
 
           <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 class="flex items-center gap-2 font-black text-slate-950 dark:text-white"><Icon icon="mdi:tune-variant" class="size-5 text-fuchsia-600" /> Properti elemen</h2>
-            <div v-if="selectedElement" class="mt-4 space-y-4">
+            <div v-if="selectedElement" class="mt-4 space-y-4" @focusin="beginInspectorTransaction" @pointerdown="beginInspectorTransaction" @change="endInspectorTransaction" @focusout="endInspectorTransaction">
               <div class="rounded-xl bg-fuchsia-50 px-3 py-2 text-sm font-black text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-300">{{ svgMakerElementLabels[selectedElement.type] }}</div>
               <div v-if="selectedElement.type === 'path' || selectedElement.type === 'rectangle' || selectedElement.type === 'ellipse'" class="space-y-3 rounded-2xl border border-fuchsia-200 p-3 dark:border-fuchsia-500/30">
                 <div class="flex items-center justify-between gap-2"><div><p class="text-sm font-black text-slate-950 dark:text-white">Edit node</p><p class="mt-0.5 text-[11px] font-semibold text-slate-500">{{ editableNodes.length }} node</p></div><button v-if="selectedElement.type === 'path'" type="button" class="inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-xs font-bold transition" :class="nodeAddMode ? 'bg-fuchsia-600 text-white' : 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-300'" :aria-pressed="nodeAddMode" @click="nodeAddMode = !nodeAddMode"><Icon icon="mdi:vector-point-plus" class="size-4" /> {{ nodeAddMode ? 'Klik kanvas...' : 'Tambah node' }}</button><span v-else class="rounded-lg bg-fuchsia-50 px-2.5 py-1.5 text-[11px] font-bold text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-300">Node geometri</span></div>

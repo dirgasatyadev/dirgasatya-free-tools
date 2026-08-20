@@ -26,19 +26,65 @@ export function processGreenScreenInWorker(input: { source: Blob; tolerance: num
   })
 }
 
-export function encodeAvifInWorker(input: { source: Blob; quality: number; maxPixels: number }, signal?: AbortSignal) {
-  return new Promise<ArrayBuffer>((resolve, reject) => {
-    const worker = new Worker(new URL('../workers/avif.worker.ts', import.meta.url), { type: 'module' })
-    const cleanup = () => worker.terminate()
-    worker.onmessage = (event: MessageEvent<{ buffer?: ArrayBuffer; error?: string }>) => {
-      cleanup()
-      if (event.data.error || !event.data.buffer) reject(new Error(event.data.error ?? 'Worker tidak menghasilkan AVIF.'))
-      else resolve(event.data.buffer)
+export interface AvifWorkerClient {
+  encode: (input: { source: Blob; quality: number; maxPixels: number }, signal?: AbortSignal) => Promise<ArrayBuffer>
+  terminate: () => void
+}
+
+export function createAvifWorkerClient(): AvifWorkerClient {
+  const worker = new Worker(new URL('../workers/avif.worker.ts', import.meta.url), { type: 'module' })
+  let requestId = 0
+  let stopped = false
+  let pending: { id: number; resolve: (buffer: ArrayBuffer) => void; reject: (error: Error) => void; signal?: AbortSignal; abort?: () => void } | null = null
+
+  const clearPending = () => {
+    if (pending?.signal && pending.abort) pending.signal.removeEventListener('abort', pending.abort)
+    pending = null
+  }
+  const terminate = () => {
+    stopped = true
+    worker.terminate()
+    if (pending) {
+      const reject = pending.reject
+      clearPending()
+      reject(abortError('Konversi AVIF dibatalkan.'))
     }
-    worker.onerror = () => { cleanup(); reject(new Error('AVIF worker tidak dapat dimuat.')) }
-    signal?.addEventListener('abort', () => { cleanup(); reject(abortError('Konversi AVIF dibatalkan.')) }, { once: true })
-    worker.postMessage(input)
-  })
+  }
+  worker.onmessage = (event: MessageEvent<{ id?: number; buffer?: ArrayBuffer; error?: string }>) => {
+    if (!pending || event.data.id !== pending.id) return
+    const { resolve, reject } = pending
+    clearPending()
+    if (event.data.error || !event.data.buffer) reject(new Error(event.data.error ?? 'Worker tidak menghasilkan AVIF.'))
+    else resolve(event.data.buffer)
+  }
+  worker.onerror = () => {
+    if (!pending) return
+    const reject = pending.reject
+    clearPending()
+    reject(new Error('AVIF worker tidak dapat dimuat.'))
+  }
+
+  return {
+    encode(input, signal) {
+      if (stopped) return Promise.reject(new Error('AVIF worker sudah dihentikan.'))
+      if (pending) return Promise.reject(new Error('AVIF worker masih memproses gambar sebelumnya.'))
+      if (signal?.aborted) return Promise.reject(abortError('Konversi AVIF dibatalkan.'))
+      return new Promise<ArrayBuffer>((resolve, reject) => {
+        const id = ++requestId
+        const abort = () => terminate()
+        pending = { id, resolve, reject, signal, abort }
+        signal?.addEventListener('abort', abort, { once: true })
+        worker.postMessage({ id, ...input })
+      })
+    },
+    terminate,
+  }
+}
+
+export async function encodeAvifInWorker(input: { source: Blob; quality: number; maxPixels: number }, signal?: AbortSignal) {
+  const client = createAvifWorkerClient()
+  try { return await client.encode(input, signal) }
+  finally { client.terminate() }
 }
 
 export function encodeWebpInWorker(input: { source: Blob; quality: number; maxPixels: number }, signal?: AbortSignal) {

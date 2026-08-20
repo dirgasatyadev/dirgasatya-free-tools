@@ -12,4 +12,9 @@ describe('route SEO', () => {
     expect(document.title).toBe('Cron Expression Builder - Dearga Free Tools')
     expect(document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href).toBe(`${window.location.origin}/tools/cron-expression-builder`)
   })
+
+  it('menandai route 404 agar tidak diindeks', () => {
+    updateRouteSeo({ title: 'Halaman Tidak Ditemukan', description: '404.', path: '/tidak-ada', robots: 'noindex, nofollow' })
+    expect(document.head.querySelector<HTMLMetaElement>('meta[name="robots"]')?.content).toBe('noindex, nofollow')
+  })
 })

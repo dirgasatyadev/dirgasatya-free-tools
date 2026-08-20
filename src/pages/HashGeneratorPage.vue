@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import SiteHeader from '@/components/SiteHeader.vue'
 import { digestFile, digestText, type DigestAlgorithm } from '@/composables/useCryptoTools'
@@ -16,6 +16,7 @@ const isHashing = ref(false)
 const isDragging = ref(false)
 const progress = ref(0)
 let hashingRequest = 0
+let hashingController: AbortController | null = null
 
 const bitLengths: Record<DigestAlgorithm, number> = { MD5: 128, 'SHA-256': 256, 'SHA-384': 384, 'SHA-512': 512 }
 const bitLength = computed(() => bitLengths[props.algorithm])
@@ -33,6 +34,8 @@ const comparison = computed<'empty' | 'invalid' | 'match' | 'mismatch'>(() => {
 watch(
   () => [inputMode.value, inputText.value, selectedFile.value, props.algorithm] as const,
   async ([mode, text, file]) => {
+    hashingController?.abort()
+    hashingController = null
     const requestId = ++hashingRequest
     hashResult.value = ''
     errorMessage.value = ''
@@ -43,17 +46,22 @@ watch(
       return
     }
     isHashing.value = true
+    const controller = new AbortController()
+    hashingController = controller
     try {
       const result = mode === 'text'
         ? await digestText(text, props.algorithm)
         : await digestFile(file!, props.algorithm, (value) => {
             if (requestId === hashingRequest) progress.value = value
-          })
+          }, controller.signal)
       if (requestId === hashingRequest) hashResult.value = result
     } catch (error) {
-      if (requestId === hashingRequest) errorMessage.value = error instanceof Error ? error.message : 'Checksum tidak dapat dibuat.'
+      if (requestId === hashingRequest && !(error instanceof DOMException && error.name === 'AbortError')) errorMessage.value = error instanceof Error ? error.message : 'Checksum tidak dapat dibuat.'
     } finally {
-      if (requestId === hashingRequest) isHashing.value = false
+      if (requestId === hashingRequest) {
+        hashingController = null
+        isHashing.value = false
+      }
     }
   },
   { immediate: true },
@@ -74,11 +82,20 @@ function handleDrop(event: DragEvent) {
   selectFile(event.dataTransfer?.files[0])
 }
 function clearFile() {
+  hashingController?.abort()
+  hashingController = null
   ++hashingRequest
   selectedFile.value = null
   hashResult.value = ''
   progress.value = 0
   isHashing.value = false
+}
+function cancelHashing() {
+  hashingController?.abort()
+  hashingController = null
+  ++hashingRequest
+  isHashing.value = false
+  progress.value = 0
 }
 async function copyHash() {
   if (!hashResult.value) return
@@ -112,6 +129,7 @@ function formatFileSize(bytes: number) {
   while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1 }
   return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unit]}`
 }
+onBeforeUnmount(cancelHashing)
 </script>
 
 <template>
@@ -158,6 +176,7 @@ function formatFileSize(bytes: number) {
                 <button type="button" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!hashResult || isHashing" @click="copyHash"><Icon :icon="copied ? 'mdi:check' : 'mdi:content-copy'" class="size-5" />{{ copied ? 'Tersalin' : 'Salin checksum' }}</button>
                 <button type="button" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" :disabled="!hashResult || isHashing" @click="downloadChecksum"><Icon icon="mdi:download-outline" class="size-5" /> Download .txt</button>
               </div>
+              <button v-if="isHashing && inputMode === 'file'" type="button" class="mt-3 min-h-11 w-full rounded-xl bg-rose-50 px-4 font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300" @click="cancelHashing">Batalkan checksum</button>
               <label class="mt-6 block"><span class="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">Expected checksum</span><input v-model="expectedChecksum" type="text" spellcheck="false" autocomplete="off" class="min-h-12 w-full rounded-xl border bg-white px-4 font-mono text-sm outline-none transition focus:ring-4 dark:bg-slate-950" :class="comparison === 'match' ? 'border-emerald-500 focus:ring-emerald-100 dark:focus:ring-emerald-500/15' : comparison === 'mismatch' || comparison === 'invalid' ? 'border-rose-500 focus:ring-rose-100 dark:focus:ring-rose-500/15' : 'border-slate-200 focus:border-blue-500 focus:ring-blue-100 dark:border-slate-700 dark:focus:ring-blue-500/15'" :placeholder="`Tempel checksum ${algorithm} (${bitLength / 4} karakter hex)`" /></label>
               <p v-if="comparison !== 'empty'" class="mt-3 flex items-center gap-2 rounded-xl p-3 text-sm font-bold" :class="comparison === 'match' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'" role="status"><Icon :icon="comparison === 'match' ? 'mdi:check-circle' : 'mdi:alert-circle'" class="size-5 shrink-0" />{{ comparison === 'match' ? 'Checksum cocok. File atau teks terverifikasi.' : comparison === 'invalid' ? `Format tidak valid. Masukkan ${bitLength / 4} karakter hexadecimal.` : 'Checksum tidak cocok.' }}</p>
             </div>

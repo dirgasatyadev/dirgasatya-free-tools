@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getAdaptiveZipCreateLimit, getAdaptiveZipExtractionLimit, getZipEntrySafetyIssue, uniqueArchiveNames, validateZipCreation, validateZipSelection, type ZipEntryInfo } from '@/composables/useZipTools'
+import { extractZipFiles, getAdaptiveZipCreateLimit, getAdaptiveZipExtractionLimit, getZipEntrySafetyIssue, uniqueArchiveNames, validateZipCreation, validateZipSelection, type ZipEntryInfo } from '@/composables/useZipTools'
 
 describe('ZIP tool helpers', () => {
   it('membuat nama entry duplikat menjadi unik', () => {
@@ -23,5 +23,11 @@ describe('ZIP tool helpers', () => {
     expect(getAdaptiveZipCreateLimit(2)).toBe(256 * 1024 * 1024)
     expect(() => validateZipCreation(Array.from({ length: 1_001 }, () => ({ size: 1 })))).toThrow('1.000 file')
     expect(() => validateZipCreation([{ size: 513 * 1024 * 1024 }], 512 * 1024 * 1024)).toThrow('budget memory')
+  })
+
+  it('membatalkan ekstraksi sebelum file ZIP dibaca', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(extractZipFiles(new Blob(), [], undefined, controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
   })
 })

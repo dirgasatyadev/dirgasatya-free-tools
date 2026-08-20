@@ -14,6 +14,7 @@ export type ChangelogScope =
   | 'Security & Performance'
   | 'Correctness & Platform'
   | 'Reliability & Browser Testing'
+  | 'Routing & Security'
 
 export interface ChangeItem {
   type: ChangeType

@@ -422,7 +422,7 @@ async function downloadAll() {
           >
             <input type="file" accept="image/png,.png" multiple class="sr-only" :disabled="isConverting || isPreparingDownload || items.length >= maxPngFiles" @change="handleFileInput" />
             <span class="grid size-14 place-items-center rounded-2xl bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
-              <Icon icon="mdi:cloud-upload-multiple-outline" class="size-8" aria-hidden="true" />
+              <Icon icon="mdi:cloud-upload-outline" class="size-8" aria-hidden="true" />
             </span>
             <p class="mt-4 text-lg font-bold text-slate-950 dark:text-white">
               {{ items.length ? 'Tambahkan file PNG lainnya' : 'Pilih atau tarik file PNG ke sini' }}

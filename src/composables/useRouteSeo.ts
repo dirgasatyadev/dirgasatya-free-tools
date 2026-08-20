@@ -3,6 +3,7 @@ export interface RouteSeoData {
   description: string
   path: string
   applicationName?: string
+  robots?: string
 }
 
 function setMeta(selector: string, attribute: 'name' | 'property', key: string, content: string) {
@@ -33,6 +34,7 @@ export function updateRouteSeo(data: RouteSeoData) {
   setMeta('meta[name="twitter:card"]', 'name', 'twitter:card', 'summary')
   setMeta('meta[name="twitter:title"]', 'name', 'twitter:title', fullTitle)
   setMeta('meta[name="twitter:description"]', 'name', 'twitter:description', data.description)
+  setMeta('meta[name="robots"]', 'name', 'robots', data.robots ?? 'index, follow')
   let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')
   if (!canonical) {
     canonical = document.createElement('link')

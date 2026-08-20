@@ -38,6 +38,12 @@ const router = createRouter({
       meta: { seoTitle: 'Changelog', seoDescription: 'Riwayat fitur, peningkatan, keamanan, dan perubahan Dearga Free Tools.' },
     },
     ...toolRoutes,
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('@/pages/NotFoundPage.vue'),
+      meta: { seoTitle: 'Halaman Tidak Ditemukan', seoDescription: 'Halaman yang Anda cari tidak tersedia di Dearga Free Tools.', seoRobots: 'noindex, nofollow' },
+    },
   ],
 })
 
@@ -68,6 +74,7 @@ router.afterEach((to, _from, failure) => {
     description: String(to.meta.seoDescription ?? 'Kumpulan free tool praktis yang berjalan langsung di browser.'),
     path: to.path,
     ...(to.meta.applicationName ? { applicationName: String(to.meta.applicationName) } : {}),
+    robots: String(to.meta.seoRobots ?? 'index, follow'),
   })
 })
 

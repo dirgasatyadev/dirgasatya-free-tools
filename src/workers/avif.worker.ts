@@ -1,4 +1,4 @@
-interface AvifRequest { source: Blob; quality: number; maxPixels: number }
+interface AvifRequest { id?: number; source: Blob; quality: number; maxPixels: number }
 
 self.onmessage = async (event: MessageEvent<AvifRequest>) => {
   let bitmap: ImageBitmap | undefined
@@ -16,9 +16,9 @@ self.onmessage = async (event: MessageEvent<AvifRequest>) => {
     const { default: encode } = await import('@jsquash/avif/encode.js')
     const buffer = await encode(imageData, { quality: event.data.quality, speed: 6 })
     ;(self as unknown as { postMessage: (message: unknown, transfer: Transferable[]) => void })
-      .postMessage({ buffer }, [buffer])
+      .postMessage({ id: event.data.id, buffer }, [buffer])
   } catch (error) {
-    self.postMessage({ error: error instanceof Error ? error.message : 'AVIF worker gagal.' })
+    self.postMessage({ id: event.data.id, error: error instanceof Error ? error.message : 'AVIF worker gagal.' })
   } finally {
     bitmap?.close()
   }

@@ -2,13 +2,32 @@ import type { ChangelogEntry } from '@/type/changelog'
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.13.2',
+    date: '20 Agustus 2026',
+    title: 'Routing, Resource Controls & Offline UI',
+    description: 'HTTP 404 yang benar, defensive workload limits, pembatalan operasi file, dan pengurangan ketergantungan runtime eksternal.',
+    scope: 'Routing & Security',
+    icon: 'mdi:shield-lock-outline',
+    latest: true,
+    changes: [
+      { type: 'Infrastruktur', text: 'Cloudflare Static Assets memakai drop-trailing-slash dan 404-page, menghasilkan dist/404.html, serta Vue memiliki route catch-all untuk navigasi SPA invalid.' },
+      { type: 'Keamanan', text: 'Bcrypt dan Argon2id verifier memvalidasi version, cost, memory, iterations, parallelism, salt, dan hash length sebelum menjalankan WASM.' },
+      { type: 'Peningkatan', text: 'Generate dan verify Bcrypt/Argon2id berjalan di Web Worker dengan tombol pembatalan agar pekerjaan berat tidak mengunci UI.' },
+      { type: 'Peningkatan', text: 'Checksum file serta ekstraksi ZIP menerima AbortSignal dan menyediakan tombol cancel yang benar-benar menghentikan pekerjaan.' },
+      { type: 'Peningkatan', text: 'Batch PNG to AVIF mempertahankan satu worker dan instance encoder selama antrean, lalu menghentikannya setelah batch selesai.' },
+      { type: 'Peningkatan', text: 'Perubahan properti inspector SVG Maker kini dicatat sebagai transaksi undo/redo.' },
+      { type: 'Infrastruktur', text: 'Playwright memakai hasil build CI yang sudah tersedia sehingga production build tidak dijalankan dua kali.' },
+      { type: 'Infrastruktur', text: 'Hanya subset ikon MDI yang dipakai aplikasi yang diregistrasikan secara lokal; CI memverifikasi subset tetap sinkron.' },
+      { type: 'Keamanan', text: 'Static responses mendapat nosniff, referrer policy, permissions policy, dan proteksi framing melalui public/_headers.' },
+    ],
+  },
+  {
     version: 'v0.13.1',
     date: '20 Agustus 2026',
     title: 'Runtime Reliability & Browser Coverage',
     description: 'Perbaikan codec Cron, pipeline gambar, ZIP memory safety, streaming data, SEO, dan validasi browser nyata.',
     scope: 'Reliability & Browser Testing',
     icon: 'mdi:test-tube',
-    latest: true,
     changes: [
       { type: 'Peningkatan', text: 'Quartz Cron memetakan weekday numeric canonical SUN=0…SAT=6 ke format Quartz 1…7 tanpa membuat preview berbeda dari ekspresi.' },
       { type: 'Peningkatan', text: 'Green Screen memperbaiki nama input AVIF dan menambahkan pembatalan untuk worker, editor, serta seluruh batch.' },

@@ -6,6 +6,8 @@ import {
   encodeArgon2id,
   encodeBcrypt,
   generateJwt,
+  parseArgon2idHashParameters,
+  parseBcryptHashParameters,
   parseJsonObject,
   verifyArgon2id,
   verifyBcrypt,
@@ -33,6 +35,24 @@ describe('crypto tool helpers', () => {
       'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
     )
     expect(progress).toEqual([0, 1])
+  })
+
+  it('menghentikan checksum file saat signal dibatalkan', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(digestFile(new Blob(['abc']), 'SHA-256', undefined, controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('menolak parameter Bcrypt dari luar budget produk', () => {
+    expect(parseBcryptHashParameters(`$2b$14$${'a'.repeat(53)}`)).toEqual({ costFactor: 14 })
+    expect(() => parseBcryptHashParameters(`$2b$15$${'a'.repeat(53)}`)).toThrow('4 dan 14')
+  })
+
+  it('menolak parameter Argon2id ekstrem sebelum menjalankan WASM', () => {
+    const safe = '$argon2id$v=19$m=65536,t=3,p=4$c2FsdHNhbHRzYWx0$MTIzNDU2Nzg5MDEyMzQ1Ng'
+    expect(parseArgon2idHashParameters(safe)).toMatchObject({ version: 19, memorySize: 65536, iterations: 3, parallelism: 4 })
+    expect(() => parseArgon2idHashParameters(safe.replace('m=65536', 'm=999999'))).toThrow('262144')
+    expect(() => parseArgon2idHashParameters(safe.replace('v=19', 'v=16'))).toThrow('v=19')
   })
 
   it('membuat dan memverifikasi hash Bcrypt', async () => {

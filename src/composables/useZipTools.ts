@@ -129,7 +129,11 @@ export async function listZipEntries(file: Blob): Promise<ZipEntryInfo[]> {
   }
 }
 
-export async function extractZipFiles(file: Blob, selectedIndices: number[], onProgress?: (completed: number, total: number) => void): Promise<ExtractedZipFile[]> {
+export async function extractZipFiles(file: Blob, selectedIndices: number[], onProgress?: (completed: number, total: number) => void, signal?: AbortSignal): Promise<ExtractedZipFile[]> {
+  const throwIfAborted = () => {
+    if (signal?.aborted) throw new DOMException('Ekstraksi ZIP dibatalkan.', 'AbortError')
+  }
+  throwIfAborted()
   const { BlobReader, BlobWriter, ZipReader } = await import('@zip.js/zip.js')
   const reader = new ZipReader(new BlobReader(file))
   try {
@@ -146,18 +150,30 @@ export async function extractZipFiles(file: Blob, selectedIndices: number[], onP
     const extracted: ExtractedZipFile[] = []
     let extractedBytes = 0
     for (let index = 0; index < fileEntries.length; index += 1) {
+      throwIfAborted()
       const entry = fileEntries[index]!
       if (!('getData' in entry)) continue
       const controller = new AbortController()
-      const blob = await entry.getData(new BlobWriter(), {
-        signal: controller.signal,
-        onprogress: (entryBytes) => {
-          if (entryBytes > maxZipEntrySize || extractedBytes + entryBytes > maxSelectedSize) {
-            controller.abort('Batas aman ekstraksi ZIP terlampaui.')
-            throw new Error('Ekstraksi dihentikan karena ukuran aktual melebihi batas memory.')
-          }
-        },
-      })
+      const abortEntry = () => controller.abort(signal?.reason)
+      signal?.addEventListener('abort', abortEntry, { once: true })
+      let blob: Blob
+      try {
+        blob = await entry.getData(new BlobWriter(), {
+          signal: controller.signal,
+          onprogress: (entryBytes) => {
+            if (entryBytes > maxZipEntrySize || extractedBytes + entryBytes > maxSelectedSize) {
+              controller.abort('Batas aman ekstraksi ZIP terlampaui.')
+              throw new Error('Ekstraksi dihentikan karena ukuran aktual melebihi batas memory.')
+            }
+          },
+        })
+      } catch (error) {
+        if (signal?.aborted) throw new DOMException('Ekstraksi ZIP dibatalkan.', 'AbortError')
+        throw error
+      } finally {
+        signal?.removeEventListener('abort', abortEntry)
+      }
+      throwIfAborted()
       extractedBytes += blob.size
       extracted.push({
         index: entries.indexOf(entry),

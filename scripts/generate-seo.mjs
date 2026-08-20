@@ -56,7 +56,7 @@ function render(route) {
     url,
     ...(route.applicationName ? { applicationCategory: 'UtilitiesApplication', operatingSystem: 'Any', offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' } } : {}),
   }
-  const tags = `<link rel="canonical" href="${escapeHtml(url)}"><meta property="og:url" content="${escapeHtml(url)}"><script id="route-json-ld" type="application/ld+json">${JSON.stringify(schema).replaceAll('<', '\\u003c')}</script>`
+  const tags = `<link rel="canonical" href="${escapeHtml(url)}"><meta name="robots" content="${route.robots ?? 'index, follow'}"><meta property="og:url" content="${escapeHtml(url)}"><script id="route-json-ld" type="application/ld+json">${JSON.stringify(schema).replaceAll('<', '\\u003c')}</script>`
   return template
     .replace(/<title>.*?<\/title>/, `<title>${escapeHtml(title)}</title>`)
     .replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${escapeHtml(route.description)}">`)
@@ -68,14 +68,18 @@ function render(route) {
     .replace('<div id="app"></div>', `<div id="app"><main><h1>${escapeHtml(route.title)}</h1><p>${escapeHtml(route.description)}</p></main></div>`)
 }
 
+const notFoundRoute = { path: '/404', title: 'Halaman Tidak Ditemukan', description: 'Halaman yang Anda cari tidak tersedia di Dearga Free Tools.', robots: 'noindex, nofollow' }
+
 for (const route of routes) {
   const output = route.path === '/' ? new URL('../dist/index.html', import.meta.url) : new URL(`../dist${route.path}/index.html`, import.meta.url)
   await mkdir(dirname(fileURLToPath(output)), { recursive: true })
   await writeFile(fileURLToPath(output), render(route), 'utf8')
 }
 
+await writeFile(join(distPath, '404.html'), render(notFoundRoute), 'utf8')
+
 const today = new Date().toISOString().slice(0, 10)
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${routes.map((route) => `  <url><loc>${siteUrl}${route.path === '/' ? '/' : route.path}</loc><lastmod>${today}</lastmod></url>`).join('\n')}\n</urlset>\n`
 await writeFile(join(distPath, 'sitemap.xml'), sitemap, 'utf8')
 await writeFile(join(distPath, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${siteUrl}/sitemap.xml\n`, 'utf8')
-console.log(`Generated SEO HTML for ${routes.length} routes.`)
+console.log(`Generated SEO HTML for ${routes.length} routes and 404 page.`)

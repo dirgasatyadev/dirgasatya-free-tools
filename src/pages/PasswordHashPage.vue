@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import SiteHeader from '@/components/SiteHeader.vue'
 import {
   defaultArgon2idOptions,
-  encodeArgon2id,
-  encodeBcrypt,
-  verifyArgon2id,
-  verifyBcrypt,
   type PasswordHashAlgorithm,
 } from '@/composables/useCryptoTools'
+import { runPasswordHashWorker } from '@/composables/usePasswordHashWorker'
 
 const props = defineProps<{ algorithm: PasswordHashAlgorithm }>()
 
@@ -28,6 +25,7 @@ const showPasswords = ref(false)
 const errorMessage = ref('')
 const verificationResult = ref<boolean | null>(null)
 const copied = ref(false)
+let processingController: AbortController | null = null
 
 const isBcrypt = computed(() => props.algorithm === 'bcrypt')
 const toolName = computed(() =>
@@ -40,10 +38,16 @@ const accentClasses = computed(() =>
     : 'bg-cyan-700 hover:bg-cyan-800 disabled:bg-cyan-500',
 )
 
-watch([mode, verifyPassword, verifyHash], () => {
+watch([mode, password, costFactor, memorySize, iterations, parallelism, hashLength, verifyPassword, verifyHash, () => props.algorithm], () => {
+  cancelProcessing()
   verificationResult.value = null
   errorMessage.value = ''
 })
+
+function cancelProcessing() {
+  processingController?.abort()
+  processingController = null
+}
 
 async function createHash() {
   if (isProcessing.value) return
@@ -53,17 +57,22 @@ async function createHash() {
   copied.value = false
 
   try {
-    generatedHash.value = isBcrypt.value
-      ? await encodeBcrypt(password.value, costFactor.value)
-      : await encodeArgon2id(password.value, {
-          memorySize: memorySize.value,
-          iterations: iterations.value,
-          parallelism: parallelism.value,
-          hashLength: hashLength.value,
-        })
+    const controller = new AbortController()
+    processingController = controller
+    const result = await runPasswordHashWorker({
+      action: 'encode',
+      algorithm: props.algorithm,
+      password: password.value,
+      ...(isBcrypt.value
+        ? { costFactor: costFactor.value }
+        : { argon2Options: { memorySize: memorySize.value, iterations: iterations.value, parallelism: parallelism.value, hashLength: hashLength.value } }),
+    }, controller.signal)
+    if (typeof result !== 'string') throw new Error('Worker menghasilkan respons hash yang tidak valid.')
+    generatedHash.value = result
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Hash tidak dapat dibuat.'
+    if (!(error instanceof DOMException && error.name === 'AbortError')) errorMessage.value = error instanceof Error ? error.message : 'Hash tidak dapat dibuat.'
   } finally {
+    processingController = null
     isProcessing.value = false
   }
 }
@@ -75,12 +84,15 @@ async function verifyHashValue() {
   verificationResult.value = null
 
   try {
-    verificationResult.value = isBcrypt.value
-      ? await verifyBcrypt(verifyPassword.value, verifyHash.value)
-      : await verifyArgon2id(verifyPassword.value, verifyHash.value)
+    const controller = new AbortController()
+    processingController = controller
+    const result = await runPasswordHashWorker({ action: 'verify', algorithm: props.algorithm, password: verifyPassword.value, hash: verifyHash.value }, controller.signal)
+    if (typeof result !== 'boolean') throw new Error('Worker menghasilkan respons verifikasi yang tidak valid.')
+    verificationResult.value = result
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Hash tidak dapat diverifikasi.'
+    if (!(error instanceof DOMException && error.name === 'AbortError')) errorMessage.value = error instanceof Error ? error.message : 'Hash tidak dapat diverifikasi.'
   } finally {
+    processingController = null
     isProcessing.value = false
   }
 }
@@ -95,6 +107,8 @@ async function copyHash() {
     errorMessage.value = 'Browser tidak mengizinkan penyalinan otomatis.'
   }
 }
+
+onBeforeUnmount(cancelProcessing)
 </script>
 
 <template>
@@ -130,6 +144,7 @@ async function copyHash() {
             </div>
 
             <button type="submit" class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-5 font-bold text-white transition disabled:cursor-wait" :class="accentClasses" :disabled="isProcessing"><Icon :icon="isProcessing ? 'mdi:loading' : 'mdi:lock-outline'" class="size-5" :class="{ 'animate-spin': isProcessing }" aria-hidden="true" />{{ isProcessing ? 'Membuat hash...' : `Encode dengan ${isBcrypt ? 'Bcrypt' : 'Argon2id'}` }}</button>
+            <button v-if="isProcessing" type="button" class="min-h-11 w-full rounded-xl bg-rose-50 px-4 font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300" @click="cancelProcessing">Batalkan proses</button>
 
             <div v-if="generatedHash" class="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-500/25 dark:bg-emerald-500/10"><div class="flex items-center justify-between gap-3"><p class="font-bold text-emerald-800 dark:text-emerald-300">Encoded hash</p><button type="button" class="inline-flex min-h-9 items-center gap-2 rounded-lg bg-emerald-600 px-3 text-sm font-bold text-white hover:bg-emerald-700" @click="copyHash"><Icon :icon="copied ? 'mdi:check' : 'mdi:content-copy'" class="size-4" aria-hidden="true" />{{ copied ? 'Tersalin' : 'Salin' }}</button></div><textarea :value="generatedHash" readonly rows="4" class="mt-3 w-full resize-none rounded-xl border border-emerald-200 bg-white p-3 font-mono text-sm leading-6 text-slate-800 outline-none dark:border-emerald-500/25 dark:bg-slate-950 dark:text-slate-200"></textarea></div>
           </form>
@@ -138,6 +153,7 @@ async function copyHash() {
             <label class="block"><span class="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">Password yang diuji</span><input v-model="verifyPassword" :type="showPasswords ? 'text' : 'password'" autocomplete="current-password" class="min-h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-indigo-500/15" placeholder="Masukkan password" /></label>
             <label class="block"><span class="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">Encoded hash {{ isBcrypt ? 'Bcrypt' : 'Argon2id' }}</span><textarea v-model="verifyHash" rows="5" class="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-sm leading-6 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-indigo-500/15" :placeholder="isBcrypt ? '$2a$10$...' : '$argon2id$v=19$...'"></textarea></label>
             <button type="submit" class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-5 font-bold text-white transition disabled:cursor-wait" :class="accentClasses" :disabled="isProcessing"><Icon :icon="isProcessing ? 'mdi:loading' : 'mdi:shield-check-outline'" class="size-5" :class="{ 'animate-spin': isProcessing }" aria-hidden="true" />{{ isProcessing ? 'Memverifikasi...' : 'Verifikasi password' }}</button>
+            <button v-if="isProcessing" type="button" class="min-h-11 w-full rounded-xl bg-rose-50 px-4 font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300" @click="cancelProcessing">Batalkan proses</button>
             <div v-if="verificationResult !== null" role="status" class="flex items-center gap-3 rounded-2xl p-4 font-bold" :class="verificationResult ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'"><Icon :icon="verificationResult ? 'mdi:check-circle' : 'mdi:close-circle'" class="size-6 shrink-0" aria-hidden="true" />{{ verificationResult ? 'Password cocok dengan hash.' : 'Password tidak cocok dengan hash.' }}</div>
           </form>
 

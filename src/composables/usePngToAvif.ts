@@ -1,6 +1,6 @@
 import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { getAdaptiveAvifPixelLimit, supportsOffscreenImageProcessing } from '@/composables/imageSafety'
-import { encodeAvifInWorker } from '@/composables/image/imageWorker'
+import { createAvifWorkerClient, encodeAvifInWorker, type AvifWorkerClient } from '@/composables/image/imageWorker'
 import { useImageBatchQueue } from '@/composables/image/useImageBatchQueue'
 import { createUniqueFileName, normalizeImageBaseName } from '@/composables/image/fileNaming'
 
@@ -163,9 +163,10 @@ export function usePngToAvif() {
     revokeUrl(item.outputPreviewUrl)
   }
 
-  async function encodeSource(source: Blob, selectedQuality: number, signal?: AbortSignal) {
+  async function encodeSource(source: Blob, selectedQuality: number, signal?: AbortSignal, workerClient?: AvifWorkerClient) {
     if (supportsOffscreenImageProcessing()) {
-      return encodeAvifInWorker({ source, quality: selectedQuality, maxPixels: adaptiveMaxPixels }, signal)
+      const input = { source, quality: selectedQuality, maxPixels: adaptiveMaxPixels }
+      return workerClient ? workerClient.encode(input, signal) : encodeAvifInWorker(input, signal)
     }
     const bitmap = await createImageBitmap(source)
     try {
@@ -187,12 +188,12 @@ export function usePngToAvif() {
     return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Browser tidak dapat membaca hasil crop.')), 'image/png'))
   }
 
-  async function convertItem(item: PngConversionItem, selectedQuality: number, signal?: AbortSignal) {
+  async function convertItem(item: PngConversionItem, selectedQuality: number, signal?: AbortSignal, workerClient?: AvifWorkerClient) {
     clearItemOutput(item)
     item.status = 'processing'
     item.errorMessage = ''
     try {
-      const encoded = await encodeSource(item.file, selectedQuality, signal)
+      const encoded = await encodeSource(item.file, selectedQuality, signal, workerClient)
 
       item.outputBlob = new Blob([encoded], { type: 'image/avif' })
       item.outputPreviewUrl = URL.createObjectURL(item.outputBlob)
@@ -256,6 +257,7 @@ export function usePngToAvif() {
     const controller = new AbortController()
     conversionController = controller
     const selectedQuality = quality.value
+    const workerClient = supportsOffscreenImageProcessing() ? createAvifWorkerClient() : undefined
 
     try {
       const queue = items.value.filter(
@@ -264,13 +266,14 @@ export function usePngToAvif() {
 
       for (const item of queue) {
         if (controller.signal.aborted) break
-        await convertItem(item, selectedQuality, controller.signal)
+        await convertItem(item, selectedQuality, controller.signal, workerClient)
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
       }
     } catch (error) {
       errorMessage.value =
         error instanceof Error ? error.message : 'Encoder AVIF tidak dapat dimuat oleh browser.'
     } finally {
+      workerClient?.terminate()
       conversionController = null
       isConverting.value = false
     }
