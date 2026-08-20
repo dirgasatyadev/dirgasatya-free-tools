@@ -41,3 +41,9 @@ jobs:
 
       - name: Production build
         run: npm run build-only
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Browser smoke tests
+        run: npm run test:e2e

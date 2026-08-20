@@ -1,1 +1,1 @@
-export { encodeAvifInWorker, processGreenScreenInWorker } from '@/composables/useImageWorkers'
+export { encodeAvifInWorker, encodeWebpInWorker, processGreenScreenInWorker } from '@/composables/useImageWorkers'

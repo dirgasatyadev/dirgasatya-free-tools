@@ -2,6 +2,7 @@ import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { getAdaptiveAvifPixelLimit, supportsOffscreenImageProcessing } from '@/composables/imageSafety'
 import { encodeAvifInWorker } from '@/composables/image/imageWorker'
 import { useImageBatchQueue } from '@/composables/image/useImageBatchQueue'
+import { createUniqueFileName, normalizeImageBaseName } from '@/composables/image/fileNaming'
 
 const maxFileSize = 25 * 1024 * 1024
 const maxPixels = 40_000_000
@@ -79,17 +80,7 @@ export function createAvifFileName(fileName: string) {
 }
 
 export function normalizeAvifBaseName(fileName: string) {
-  const withoutExtension = fileName.replace(/\.avif$/i, '')
-  const withoutControlCharacters = Array.from(withoutExtension)
-    .filter((character) => character.charCodeAt(0) >= 32)
-    .join('')
-  const safeBaseName = withoutControlCharacters
-    .replace(/[<>:"/\\|?*]/g, '-')
-    .replace(/[. ]+$/g, '')
-    .trim()
-    .slice(0, 180)
-
-  return safeBaseName || 'converted'
+  return normalizeImageBaseName(fileName.replace(/\.avif$/i, ''), 'converted')
 }
 
 export function normalizeAvifFileName(fileName: string) {
@@ -97,23 +88,7 @@ export function normalizeAvifFileName(fileName: string) {
 }
 
 export function createUniqueAvifFileName(fileName: string, usedFileNames: Set<string>) {
-  const normalizedFileName = normalizeAvifFileName(fileName)
-  const normalizedKey = normalizedFileName.toLocaleLowerCase('en')
-  if (!usedFileNames.has(normalizedKey)) {
-    usedFileNames.add(normalizedKey)
-    return normalizedFileName
-  }
-
-  const baseName = normalizedFileName.replace(/\.avif$/i, '')
-  let suffix = 2
-  let uniqueFileName = `${baseName}-${suffix}.avif`
-  while (usedFileNames.has(uniqueFileName.toLocaleLowerCase('en'))) {
-    suffix += 1
-    uniqueFileName = `${baseName}-${suffix}.avif`
-  }
-
-  usedFileNames.add(uniqueFileName.toLocaleLowerCase('en'))
-  return uniqueFileName
+  return createUniqueFileName(normalizeAvifBaseName(fileName), 'avif', usedFileNames)
 }
 
 export function calculateSavedPercentage(inputSize: number, outputSize: number) {

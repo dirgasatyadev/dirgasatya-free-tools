@@ -12,6 +12,8 @@
     "deploy:dry-run": "npm run build && wrangler deploy --dry-run",
     "test:unit": "vitest",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium webkit",
     "build-only": "vite build && node scripts/generate-seo.mjs",
     "type-check": "vue-tsc --build",
     "lint": "run-s lint:oxlint lint:eslint",
@@ -37,6 +39,7 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tsconfig/node24": "^24.0.4",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^24.13.3",

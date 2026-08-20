@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { Icon } from '@iconify/vue'
 import ToolPageShell from '@/components/ToolPageShell.vue'
-import { csvBlobToJson, csvToJson, csvToJsonLines, csvToObjects, detectCsvDelimiter, jsonLinesToCsv, jsonToCsv, type CsvDelimiter } from '@/composables/useUtilityTools'
+import { csvBlobToJson, csvToJson, csvToJsonLines, csvToObjects, detectCsvDelimiter, jsonLinesToCsv, jsonToCsv, streamCsvBlobToJson, type CsvDelimiter } from '@/composables/useUtilityTools'
 
 const direction = ref<'to-csv' | 'from-csv'>('to-csv')
 const jsonFormat = ref<'json' | 'jsonl'>('json')
@@ -18,6 +18,8 @@ const errorMessage = ref('')
 const copied = ref(false)
 const processingFile = ref(false)
 const sourceFileName = ref('')
+let streamController: AbortController | null = null
+const directStreamSupported = computed(() => window.isSecureContext && typeof window.showSaveFilePicker === 'function')
 
 const selectedDelimiter = computed<CsvDelimiter>(() => delimiterOption.value === 'auto' ? detectCsvDelimiter(input.value) : delimiterOption.value)
 const preview = computed(() => {
@@ -63,6 +65,38 @@ async function handleCsvFile(event: Event) {
     ;(event.target as HTMLInputElement).value = ''
   }
 }
+async function handleLargeCsvFile(event: Event) {
+  const inputElement = event.target as HTMLInputElement
+  const file = inputElement.files?.[0]
+  inputElement.value = ''
+  if (!file || !window.showSaveFilePicker) return
+  processingFile.value = true
+  sourceFileName.value = file.name
+  errorMessage.value = ''
+  const controller = new AbortController()
+  streamController = controller
+  try {
+    const extension = jsonFormat.value === 'jsonl' ? 'jsonl' : 'json'
+    const handle = await window.showSaveFilePicker({
+      suggestedName: `${file.name.replace(/\.(?:csv|tsv)$/i, '') || 'converted'}.${extension}`,
+      types: [{ description: extension === 'jsonl' ? 'JSON Lines' : 'JSON', accept: { 'application/json': [`.${extension}`] } }],
+    })
+    const writable = await handle.createWritable()
+    await streamCsvBlobToJson(file, writable, {
+      delimiter: delimiterOption.value === 'auto' ? undefined : delimiterOption.value,
+      hasHeader: hasHeader.value,
+      strict: strict.value,
+      inferTypes: inferTypes.value,
+    }, jsonFormat.value === 'jsonl', controller.signal)
+    sourceFileName.value = `${file.name} selesai disimpan tanpa buffer output.`
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === 'AbortError')) errorMessage.value = error instanceof Error ? error.message : 'File CSV tidak dapat dikonversi.'
+  } finally {
+    streamController = null
+    processingFile.value = false
+  }
+}
+function cancelFileConversion() { streamController?.abort() }
 async function copyOutput() { await navigator.clipboard.writeText(output.value); copied.value = true; window.setTimeout(() => (copied.value = false), 1_500) }
 function downloadOutput() {
   if (!output.value) return
@@ -83,10 +117,12 @@ function downloadOutput() {
 
     <div v-if="direction === 'from-csv'" class="mt-4 rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/50 p-4 dark:border-indigo-500/40 dark:bg-indigo-500/10">
       <label class="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white hover:bg-indigo-700">
-        <Icon icon="mdi:file-upload-outline" class="size-5" />{{ processingFile ? 'Memproses stream…' : 'Pilih file CSV besar' }}
+        <Icon icon="mdi:file-upload-outline" class="size-5" />{{ processingFile ? 'Memproses…' : 'Pilih file CSV' }}
         <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" class="sr-only" :disabled="processingFile" @change="handleCsvFile" />
       </label>
-      <span class="ml-3 text-xs text-slate-500">{{ sourceFileName || 'File dibaca bertahap tanpa memuat seluruh input sebagai teks.' }}</span>
+      <label v-if="directStreamSupported" class="ml-2 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-indigo-300 px-4 text-sm font-bold text-indigo-700 dark:border-indigo-500/40 dark:text-indigo-300"><Icon icon="mdi:database-export-outline" class="size-5" />Stream langsung ke file<input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" class="sr-only" :disabled="processingFile" @change="handleLargeCsvFile" /></label>
+      <button v-if="processingFile && streamController" type="button" class="ml-2 min-h-11 rounded-xl bg-rose-50 px-4 text-sm font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300" @click="cancelFileConversion">Batalkan</button>
+      <span class="mt-2 block text-xs text-slate-500">{{ sourceFileName || (directStreamSupported ? 'Gunakan stream langsung untuk file besar agar output tidak ditampung di textarea/RAM.' : 'File input dibaca bertahap; output tetap ditampilkan di textarea.') }}</span>
     </div>
 
     <div class="mt-5 grid gap-5 lg:grid-cols-2"><label class="text-sm font-bold">{{ direction === 'to-csv' ? `${jsonFormat.toUpperCase()} input` : 'CSV input' }}<textarea v-model="input" rows="17" spellcheck="false" class="mt-2 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 p-4 font-mono text-sm leading-6 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-950"></textarea></label><div><div class="mb-2 flex items-center justify-between"><span class="text-sm font-bold">{{ direction === 'to-csv' ? 'CSV output' : `${jsonFormat.toUpperCase()} output` }}</span><div class="flex gap-2"><button type="button" class="grid size-9 place-items-center rounded-lg bg-slate-100 disabled:opacity-40 dark:bg-slate-800" :disabled="!output" aria-label="Salin output" @click="copyOutput"><Icon :icon="copied ? 'mdi:check' : 'mdi:content-copy'" class="size-4" /></button><button type="button" class="grid size-9 place-items-center rounded-lg bg-slate-100 disabled:opacity-40 dark:bg-slate-800" :disabled="!output" aria-label="Download output" @click="downloadOutput"><Icon icon="mdi:download" class="size-4" /></button></div></div><textarea :value="output" rows="17" readonly class="w-full resize-y rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4 font-mono text-sm leading-6 dark:border-indigo-500/25 dark:bg-indigo-500/10"></textarea></div></div>

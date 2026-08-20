@@ -21,6 +21,7 @@ import {
   minifyJson,
   parseUnixTimestamp,
   replaceRegex,
+  streamCsvBlobToJson,
   testRegex,
   verifyJwt,
 } from '@/composables/useUtilityTools'
@@ -111,6 +112,21 @@ describe('utility tools', () => {
       }),
     } as Blob
     await expect(csvBlobToJson(streamedBlob)).resolves.toBe('[\n  {"name":"Dearga","note":"quoted \\"value\\""}\n]')
+  })
+
+  it('menulis output CSV langsung ke WritableStream tanpa output array', async () => {
+    const encoder = new TextEncoder()
+    const sourceText = 'name,score\nDearga,10\nTools,20'
+    const source = {
+      slice: () => new Blob([sourceText]),
+      stream: () => new ReadableStream({ start(controller) { controller.enqueue(encoder.encode(sourceText)); controller.close() } }),
+    } as Blob
+    const decoder = new TextDecoder()
+    let output = ''
+    const destination = new WritableStream<Uint8Array>({ write(chunk) { output += decoder.decode(chunk, { stream: true }) }, close() { output += decoder.decode() } })
+    await streamCsvBlobToJson(source, destination, { inferTypes: true })
+    expect(output).toContain('{"name":"Dearga","score":10}')
+    expect(output).toContain('{"name":"Tools","score":20}')
   })
 
   it('membuat meta tag yang aman', () => {

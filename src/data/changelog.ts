@@ -2,13 +2,32 @@ import type { ChangelogEntry } from '@/type/changelog'
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.13.1',
+    date: '20 Agustus 2026',
+    title: 'Runtime Reliability & Browser Coverage',
+    description: 'Perbaikan codec Cron, pipeline gambar, ZIP memory safety, streaming data, SEO, dan validasi browser nyata.',
+    scope: 'Reliability & Browser Testing',
+    icon: 'mdi:test-tube',
+    latest: true,
+    changes: [
+      { type: 'Peningkatan', text: 'Quartz Cron memetakan weekday numeric canonical SUN=0…SAT=6 ke format Quartz 1…7 tanpa membuat preview berbeda dari ekspresi.' },
+      { type: 'Peningkatan', text: 'Green Screen memperbaiki nama input AVIF dan menambahkan pembatalan untuk worker, editor, serta seluruh batch.' },
+      { type: 'Peningkatan', text: 'PNG to WebP kini memakai Web Worker, OffscreenCanvas, fallback main-thread, pixel budget adaptif, shared queue, dan cancellation.' },
+      { type: 'Keamanan', text: 'ZIP Create membatasi 1.000 file dan total sumber secara adaptif, memberi warning di atas 500 MB, serta mendukung pembatalan kompresi; budget ekstraksi juga adaptif.' },
+      { type: 'Peningkatan', text: 'Compress Image memakai pixel budget adaptif berdasarkan memory perangkat.' },
+      { type: 'Peningkatan', text: 'CSV besar dapat ditransformasi langsung ke file melalui WritableStream tanpa menampung seluruh output di textarea.' },
+      { type: 'Infrastruktur', text: 'Pipeline nama file AVIF, WebP, Green Screen, dan Compressor memakai helper bersama agar sanitasi serta deduplikasi konsisten.' },
+      { type: 'Infrastruktur', text: 'Playwright menguji delapan flow penting di Chromium dan WebKit, termasuk image worker, ZIP round-trip, route langsung, serta regex timeout; smoke test dijalankan oleh CI.' },
+      { type: 'Peningkatan', text: 'Runtime SEO homepage tidak lagi menghasilkan title Dearga Free Tools yang terduplikasi.' },
+    ],
+  },
+  {
     version: 'v0.13.0',
     date: '20 Agustus 2026',
     title: 'Correctness, Platform & Product Quality',
     description: 'Peningkatan correctness calculator/data, cron profesional, SEO route, CI, favicon, image pipeline, SVG, dan katalog.',
     scope: 'Correctness & Platform',
     icon: 'mdi:check-decagram-outline',
-    latest: true,
     changes: [
       { type: 'Peningkatan', text: 'Aspect Ratio Calculator memvalidasi dimensi pixel sebagai safe integer, mendukung rasio custom/desimal, lock ratio, hitung dua arah, dan preset cinematic.' },
       { type: 'Peningkatan', text: 'XML ↔ JSON memakai AST preserve-order untuk mixed content, namespace, atribut, CDATA, komentar, processing instruction, dan repeated element.' },

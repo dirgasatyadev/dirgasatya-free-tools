@@ -409,33 +409,59 @@ export function csvToObjects(value: string, options: CsvOptions = {}) {
   })
 }
 
-export async function csvBlobToJson(source: Blob, options: CsvOptions = {}, jsonLines = false) {
+async function* csvBlobRecords(source: Blob, options: CsvOptions = {}) {
   const delimiter = options.delimiter ?? detectCsvDelimiter(await source.slice(0, 64 * 1024).text())
   const rows = parseCsvStream(source, delimiter, options.strict !== false)
   const first = await rows.next()
-  if (first.done) return jsonLines ? '' : '[]'
+  if (first.done) return
   const hasHeader = options.hasHeader !== false
   const headers = (hasHeader ? first.value : first.value.map((_, index) => `column_${index + 1}`)).map((header) => header.trim())
   if (!headers.length || headers.every((header) => !header)) throw new Error('Header CSV wajib diisi.')
   if (new Set(headers).size !== headers.length) throw new Error('Header CSV tidak boleh duplikat.')
-  const output: string[] = []
   let rowNumber = hasHeader ? 2 : 1
 
-  const appendRow = (row: string[]) => {
-    if (!row.some((cellValue) => cellValue !== '')) return
+  const createRecord = (row: string[]) => {
+    if (!row.some((cellValue) => cellValue !== '')) return null
     if (options.strict !== false && row.length !== headers.length) throw new Error(`CSV row ${rowNumber} memiliki ${row.length} kolom; seharusnya ${headers.length}.`)
-    const record = Object.fromEntries(headers.map((header, index) => [header, options.inferTypes ? inferCsvCell(row[index] ?? '') : row[index] ?? '']))
-    output.push(JSON.stringify(record))
+    return Object.fromEntries(headers.map((header, index) => [header, options.inferTypes ? inferCsvCell(row[index] ?? '') : row[index] ?? '']))
   }
   if (!hasHeader) {
-    appendRow(first.value)
+    const record = createRecord(first.value)
+    if (record) yield record
     rowNumber += 1
   }
   for await (const row of rows) {
-    appendRow(row)
+    const record = createRecord(row)
+    if (record) yield record
     rowNumber += 1
   }
+}
+
+export async function csvBlobToJson(source: Blob, options: CsvOptions = {}, jsonLines = false) {
+  const output: string[] = []
+  for await (const record of csvBlobRecords(source, options)) output.push(JSON.stringify(record))
   return jsonLines ? output.join('\n') : `[\n${output.map((line) => `  ${line}`).join(',\n')}\n]`
+}
+
+export async function streamCsvBlobToJson(source: Blob, destination: WritableStream<Uint8Array>, options: CsvOptions = {}, jsonLines = false, signal?: AbortSignal) {
+  const writer = destination.getWriter()
+  const encoder = new TextEncoder()
+  let firstRecord = true
+  try {
+    if (!jsonLines) await writer.write(encoder.encode('[\n'))
+    for await (const record of csvBlobRecords(source, options)) {
+      if (signal?.aborted) throw new DOMException('Konversi CSV dibatalkan.', 'AbortError')
+      const serialized = JSON.stringify(record)
+      const prefix = jsonLines ? (firstRecord ? '' : '\n') : (firstRecord ? '  ' : ',\n  ')
+      await writer.write(encoder.encode(`${prefix}${serialized}`))
+      firstRecord = false
+    }
+    if (!jsonLines) await writer.write(encoder.encode('\n]'))
+    await writer.close()
+  } catch (error) {
+    await writer.abort(error).catch(() => undefined)
+    throw error
+  }
 }
 
 export function csvToJson(value: string, options: CsvOptions = {}) {

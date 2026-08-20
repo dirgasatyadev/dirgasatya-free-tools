@@ -23,6 +23,7 @@ import { useIncomingToolTransfer } from '@/composables/useToolTransfer'
 
 const {
   items,
+  adaptiveMaxPixels,
   quality,
   compressionMode,
   targetSizeMb,
@@ -345,7 +346,7 @@ onBeforeUnmount(() => {
             <input type="file" class="sr-only" accept="image/png,image/webp,image/jpeg,.jpg,.jpeg" multiple :disabled="isProcessing || items.length >= maxCompressImageFiles" @change="handleFileInput" />
             <span class="grid size-16 place-items-center rounded-2xl bg-violet-600 text-white shadow-lg shadow-violet-600/20"><Icon icon="mdi:image-multiple-outline" class="size-8" aria-hidden="true" /></span>
             <strong class="mt-5 text-lg text-slate-950 dark:text-white">Tarik gambar ke sini atau klik untuk memilih</strong>
-            <span class="mt-2 text-sm text-slate-500 dark:text-slate-400">PNG, WebP, JPG, JPEG · maksimal 25 MB/file · {{ items.length }}/{{ maxCompressImageFiles }} file</span>
+            <span class="mt-2 text-sm text-slate-500 dark:text-slate-400">PNG, WebP, JPG, JPEG · maksimal 25 MB/file dan {{ Math.round(adaptiveMaxPixels / 1_000_000) }} MP adaptif · {{ items.length }}/{{ maxCompressImageFiles }} file</span>
           </label>
 
           <p v-if="errorMessage" class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300" role="alert">{{ errorMessage }}</p>

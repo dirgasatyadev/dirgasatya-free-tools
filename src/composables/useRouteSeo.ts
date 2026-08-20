@@ -22,7 +22,7 @@ export function toolSeoTitle(name: string) {
 }
 
 export function updateRouteSeo(data: RouteSeoData) {
-  const fullTitle = `${data.title} - Dearga Free Tools`
+  const fullTitle = data.title === 'Dearga Free Tools' ? data.title : `${data.title} - Dearga Free Tools`
   const canonicalUrl = new URL(data.path, window.location.origin).href
   document.title = fullTitle
   setMeta('meta[name="description"]', 'name', 'description', data.description)

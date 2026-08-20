@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { estimateImageWorkingSet, getAdaptiveAvifPixelLimit, getAdaptiveGreenScreenPixelLimit } from '@/composables/imageSafety'
+import { estimateImageWorkingSet, getAdaptiveAvifPixelLimit, getAdaptiveCompressorPixelLimit, getAdaptiveGreenScreenPixelLimit, getAdaptiveWebpPixelLimit } from '@/composables/imageSafety'
 
 describe('image safety budgets', () => {
   it('menurunkan batas pixel pada perangkat low-memory', () => {
     expect(getAdaptiveGreenScreenPixelLimit(2)).toBe(8_000_000)
     expect(getAdaptiveAvifPixelLimit(4)).toBe(12_000_000)
+    expect(getAdaptiveWebpPixelLimit(2)).toBe(8_000_000)
+    expect(getAdaptiveCompressorPixelLimit(4)).toBe(14_000_000)
   })
 
   it('menghitung estimasi working set AVIF', () => {

@@ -1,9 +1,13 @@
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
 import {
   maxPngFiles,
   preparePngFiles,
-  validateImageDimensions,
 } from '@/composables/usePngToAvif'
+import { createUniqueFileName, normalizeImageBaseName } from '@/composables/image/fileNaming'
+import { validateImageDimensions } from '@/composables/image/imageValidation'
+import { encodeWebpInWorker } from '@/composables/image/imageWorker'
+import { useImageBatchQueue } from '@/composables/image/useImageBatchQueue'
+import { getAdaptiveWebpPixelLimit, supportsOffscreenImageProcessing } from '@/composables/imageSafety'
 
 export const defaultWebpQuality = 82
 export { maxPngFiles as maxPngToWebpFiles }
@@ -26,17 +30,7 @@ export function createWebpBaseName(fileName: string) {
 }
 
 export function normalizeWebpBaseName(fileName: string) {
-  const withoutExtension = fileName.replace(/\.webp$/i, '')
-  const withoutControlCharacters = Array.from(withoutExtension)
-    .filter((character) => character.charCodeAt(0) >= 32)
-    .join('')
-  const safeBaseName = withoutControlCharacters
-    .replace(/[<>:"/\\|?*]/g, '-')
-    .replace(/[. ]+$/g, '')
-    .trim()
-    .slice(0, 180)
-
-  return safeBaseName || 'converted'
+  return normalizeImageBaseName(fileName.replace(/\.webp$/i, ''), 'converted')
 }
 
 export function normalizeWebpFileName(fileName: string) {
@@ -44,22 +38,7 @@ export function normalizeWebpFileName(fileName: string) {
 }
 
 export function createUniqueWebpFileName(fileName: string, usedFileNames: Set<string>) {
-  const normalizedFileName = normalizeWebpFileName(fileName)
-  const normalizedKey = normalizedFileName.toLocaleLowerCase('en')
-  if (!usedFileNames.has(normalizedKey)) {
-    usedFileNames.add(normalizedKey)
-    return normalizedFileName
-  }
-
-  const baseName = normalizedFileName.replace(/\.webp$/i, '')
-  let suffix = 2
-  let uniqueFileName = `${baseName}-${suffix}.webp`
-  while (usedFileNames.has(uniqueFileName.toLocaleLowerCase('en'))) {
-    suffix += 1
-    uniqueFileName = `${baseName}-${suffix}.webp`
-  }
-  usedFileNames.add(uniqueFileName.toLocaleLowerCase('en'))
-  return uniqueFileName
+  return createUniqueFileName(normalizeWebpBaseName(fileName), 'webp', usedFileNames)
 }
 
 export function canvasToWebpBlob(canvas: HTMLCanvasElement, quality: number) {
@@ -93,18 +72,10 @@ export function usePngToWebp() {
   const isDragging = ref(false)
   const errorMessage = ref('')
   let itemSequence = 0
+  let conversionController: AbortController | null = null
+  const adaptiveMaxPixels = getAdaptiveWebpPixelLimit()
 
-  const completedCount = computed(
-    () => items.value.filter((item) => item.status === 'completed').length,
-  )
-  const failedCount = computed(() => items.value.filter((item) => item.status === 'error').length)
-  const processedCount = computed(() => completedCount.value + failedCount.value)
-  const progressPercentage = computed(() =>
-    items.value.length === 0 ? 0 : Math.round((processedCount.value / items.value.length) * 100),
-  )
-  const hasProcessableItems = computed(() =>
-    items.value.some((item) => item.status === 'queued' || item.status === 'error'),
-  )
+  const { completedCount, failedCount, processedCount, progressPercentage, hasProcessableItems } = useImageBatchQueue(items)
 
   function revokeUrl(url: string) {
     if (url) URL.revokeObjectURL(url)
@@ -148,33 +119,37 @@ export function usePngToWebp() {
     revokeUrl(item.outputPreviewUrl)
   }
 
-  async function convertItem(item: PngToWebpItem, selectedQuality: number) {
-    clearItemOutput(item)
-    item.status = 'processing'
-    item.errorMessage = ''
-    let bitmap: ImageBitmap | undefined
-
+  async function encodeSource(source: Blob, selectedQuality: number, signal?: AbortSignal) {
+    if (supportsOffscreenImageProcessing()) return encodeWebpInWorker({ source, quality: selectedQuality, maxPixels: adaptiveMaxPixels }, signal)
+    const bitmap = await createImageBitmap(source)
     try {
-      bitmap = await createImageBitmap(item.file)
-      const dimensionError = validateImageDimensions(bitmap.width, bitmap.height)
+      const dimensionError = validateImageDimensions(bitmap.width, bitmap.height, adaptiveMaxPixels, 'PNG')
       if (dimensionError) throw new Error(dimensionError)
-
+      if (signal?.aborted) throw new DOMException('Konversi WebP dibatalkan.', 'AbortError')
       const canvas = document.createElement('canvas')
       canvas.width = bitmap.width
       canvas.height = bitmap.height
       const context = canvas.getContext('2d')
       if (!context) throw new Error('Browser tidak dapat membaca gambar ini.')
       context.drawImage(bitmap, 0, 0)
+      const blob = await canvasToWebpBlob(canvas, selectedQuality)
+      if (signal?.aborted) throw new DOMException('Konversi WebP dibatalkan.', 'AbortError')
+      return blob
+    } finally { bitmap.close() }
+  }
 
-      item.outputBlob = await canvasToWebpBlob(canvas, selectedQuality)
+  async function convertItem(item: PngToWebpItem, selectedQuality: number, signal?: AbortSignal) {
+    clearItemOutput(item)
+    item.status = 'processing'
+    item.errorMessage = ''
+    try {
+      item.outputBlob = await encodeSource(item.file, selectedQuality, signal)
       item.outputPreviewUrl = URL.createObjectURL(item.outputBlob)
       item.status = 'completed'
     } catch (error) {
-      item.status = 'error'
+      item.status = error instanceof DOMException && error.name === 'AbortError' ? 'queued' : 'error'
       item.errorMessage =
         error instanceof Error ? error.message : 'Konversi gagal. Silakan coba file PNG lain.'
-    } finally {
-      bitmap?.close()
     }
   }
 
@@ -182,6 +157,8 @@ export function usePngToWebp() {
     if (isConverting.value || !hasProcessableItems.value) return
     errorMessage.value = ''
     isConverting.value = true
+    const controller = new AbortController()
+    conversionController = controller
     const selectedQuality = quality.value
     const queue = items.value.filter(
       (item) => item.status === 'queued' || item.status === 'error',
@@ -189,12 +166,18 @@ export function usePngToWebp() {
 
     try {
       for (const item of queue) {
-        await convertItem(item, selectedQuality)
+        if (controller.signal.aborted) break
+        await convertItem(item, selectedQuality, controller.signal)
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
       }
     } finally {
+      conversionController = null
       isConverting.value = false
     }
+  }
+
+  function cancelConversion() {
+    conversionController?.abort()
   }
 
   function reset() {
@@ -208,6 +191,7 @@ export function usePngToWebp() {
   }
 
   onBeforeUnmount(() => {
+    conversionController?.abort()
     for (const item of items.value) {
       revokeUrl(item.inputPreviewUrl)
       revokeUrl(item.outputPreviewUrl)
@@ -216,6 +200,7 @@ export function usePngToWebp() {
 
   return {
     items,
+    adaptiveMaxPixels,
     quality,
     isConverting,
     isDragging,
@@ -228,6 +213,7 @@ export function usePngToWebp() {
     addFiles,
     removeItem,
     convertAll,
+    cancelConversion,
     reset,
   }
 }

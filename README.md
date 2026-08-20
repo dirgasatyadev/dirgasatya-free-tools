@@ -17,9 +17,13 @@ npm run lint:check
 npm run type-check
 npm test
 npm run build
+npm run test:e2e:install
+npm run test:e2e
 ```
 
 `lint` memperbaiki source lokal, sedangkan `lint:check` hanya memverifikasi dan digunakan oleh CI. Saat build production, set `SITE_URL` atau `VITE_SITE_URL` ke origin deployment agar canonical URL, sitemap, dan robots.txt menggunakan domain yang benar.
+
+Playwright menjalankan delapan smoke flow penting pada Chromium dan WebKit. Perintah instalasi browser cukup dijalankan sekali pada mesin development.
 
 ## Cloudflare Workers
 

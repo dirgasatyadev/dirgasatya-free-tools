@@ -13,6 +13,7 @@ export type ChangelogScope =
   | 'File, Data & Text Tools'
   | 'Security & Performance'
   | 'Correctness & Platform'
+  | 'Reliability & Browser Testing'
 
 export interface ChangeItem {
   type: ChangeType

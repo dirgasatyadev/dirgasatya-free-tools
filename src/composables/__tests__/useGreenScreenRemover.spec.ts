@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { reactive } from 'vue'
 import {
   calculateChromaOpacity,
   defaultEdgeSoftness,
@@ -11,6 +12,7 @@ import {
   prepareGreenScreenFiles,
   validateGreenScreenFile,
 } from '@/composables/useGreenScreenRemover'
+import { createGreenScreenWorkerPayload } from '@/composables/useImageWorkers'
 
 const createFile = (name: string, type: string, size = 4) =>
   new File([new Uint8Array(size)], name, { type })
@@ -144,6 +146,7 @@ describe('Green Screen Remover helpers', () => {
 
   it('membuat dan menormalkan nama PNG hasil', () => {
     expect(createTransparentPngBaseName('model.jpeg')).toBe('model-transparent')
+    expect(createTransparentPngBaseName('model.avif')).toBe('model-transparent')
     expect(normalizePngFileName('hasil.png')).toBe('hasil.png')
     expect(normalizePngFileName('folder/hasil:*?')).toBe('folder-hasil---.png')
   })
@@ -152,5 +155,11 @@ describe('Green Screen Remover helpers', () => {
     const usedNames = new Set<string>()
     expect(createUniquePngFileName('hasil', usedNames)).toBe('hasil.png')
     expect(createUniquePngFileName('HASIL.png', usedNames)).toBe('HASIL-2.png')
+  })
+
+  it('mengubah warna reactive menjadi payload worker yang dapat di-clone', () => {
+    const keyColor = reactive({ red: 1, green: 250, blue: 2 })
+    const payload = createGreenScreenWorkerPayload({ source: new Blob(), tolerance: 55, softness: 100, keyColor, autoDetect: true, maxPixels: 1_000 })
+    expect(structuredClone(payload).keyColor).toEqual({ red: 1, green: 250, blue: 2 })
   })
 })

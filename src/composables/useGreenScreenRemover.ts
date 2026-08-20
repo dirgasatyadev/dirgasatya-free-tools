@@ -2,6 +2,7 @@ import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { getAdaptiveGreenScreenPixelLimit, supportsOffscreenImageProcessing } from '@/composables/imageSafety'
 import { processGreenScreenInWorker } from '@/composables/image/imageWorker'
 import { useImageBatchQueue } from '@/composables/image/useImageBatchQueue'
+import { createUniqueFileName, normalizeImageBaseName } from '@/composables/image/fileNaming'
 
 const maxFileSize = 25 * 1024 * 1024
 export const maxGreenScreenPixels = 40_000_000
@@ -81,22 +82,12 @@ export function prepareGreenScreenFiles(
 }
 
 export function createTransparentPngBaseName(fileName: string) {
-  const baseName = fileName.replace(/\.(png|jpe?g|webp)$/i, '')
+  const baseName = fileName.replace(/\.(png|jpe?g|webp|avif)$/i, '')
   return baseName ? `${baseName}-transparent` : 'green-screen-removed'
 }
 
 export function normalizePngBaseName(fileName: string) {
-  const withoutExtension = fileName.replace(/\.png$/i, '')
-  const withoutControlCharacters = Array.from(withoutExtension)
-    .filter((character) => character.charCodeAt(0) >= 32)
-    .join('')
-  const safeBaseName = withoutControlCharacters
-    .replace(/[<>:"/\\|?*]/g, '-')
-    .replace(/[. ]+$/g, '')
-    .trim()
-    .slice(0, 180)
-
-  return safeBaseName || 'green-screen-removed'
+  return normalizeImageBaseName(fileName.replace(/\.png$/i, ''), 'green-screen-removed')
 }
 
 export function normalizePngFileName(fileName: string) {
@@ -104,23 +95,7 @@ export function normalizePngFileName(fileName: string) {
 }
 
 export function createUniquePngFileName(fileName: string, usedFileNames: Set<string>) {
-  const normalizedFileName = normalizePngFileName(fileName)
-  const normalizedKey = normalizedFileName.toLocaleLowerCase('en')
-  if (!usedFileNames.has(normalizedKey)) {
-    usedFileNames.add(normalizedKey)
-    return normalizedFileName
-  }
-
-  const baseName = normalizedFileName.replace(/\.png$/i, '')
-  let suffix = 2
-  let uniqueFileName = `${baseName}-${suffix}.png`
-  while (usedFileNames.has(uniqueFileName.toLocaleLowerCase('en'))) {
-    suffix += 1
-    uniqueFileName = `${baseName}-${suffix}.png`
-  }
-
-  usedFileNames.add(uniqueFileName.toLocaleLowerCase('en'))
-  return uniqueFileName
+  return createUniqueFileName(normalizePngBaseName(fileName), 'png', usedFileNames)
 }
 
 export function getClampedSampleArea(
@@ -324,6 +299,7 @@ export function useGreenScreenRemover() {
   const isDragging = ref(false)
   const errorMessage = ref('')
   let itemSequence = 0
+  let processingController: AbortController | null = null
   const adaptiveMaxPixels = getAdaptiveGreenScreenPixelLimit()
 
   const { completedCount, failedCount, processedCount, progressPercentage, hasProcessableItems } = useImageBatchQueue(items)
@@ -380,6 +356,7 @@ export function useGreenScreenRemover() {
     item: GreenScreenItem,
     selectedTolerance: number,
     selectedSoftness: number,
+    signal?: AbortSignal,
   ) {
     item.status = 'processing'
     item.errorMessage = ''
@@ -388,13 +365,14 @@ export function useGreenScreenRemover() {
       const source = item.editSourceBlob ?? item.file
       let outputBlob: Blob
       if (supportsOffscreenImageProcessing()) {
-        const result = await processGreenScreenInWorker({ source, tolerance: selectedTolerance, softness: selectedSoftness, keyColor: item.keyColor, autoDetect: !item.isEdited, maxPixels: adaptiveMaxPixels })
+        const result = await processGreenScreenInWorker({ source, tolerance: selectedTolerance, softness: selectedSoftness, keyColor: item.keyColor, autoDetect: !item.isEdited, maxPixels: adaptiveMaxPixels }, signal)
         outputBlob = result.outputBlob
         if (!item.isEdited) item.keyColor = result.keyColor
       } else {
         const bitmap = await createImageBitmap(source)
         try {
           if (bitmap.width * bitmap.height > adaptiveMaxPixels) throw new Error(`Resolusi gambar melebihi batas adaptif ${Math.round(adaptiveMaxPixels / 1_000_000)} MP.`)
+          if (signal?.aborted) throw new DOMException('Pemrosesan green screen dibatalkan.', 'AbortError')
           const canvas = document.createElement('canvas')
           canvas.width = bitmap.width
           canvas.height = bitmap.height
@@ -406,6 +384,7 @@ export function useGreenScreenRemover() {
           applyChromaKey(imageData, selectedTolerance, selectedSoftness, item.keyColor)
           context.putImageData(imageData, 0, 0)
           outputBlob = await canvasToPngBlob(canvas)
+          if (signal?.aborted) throw new DOMException('Pemrosesan green screen dibatalkan.', 'AbortError')
         } finally { bitmap.close() }
       }
 
@@ -414,7 +393,7 @@ export function useGreenScreenRemover() {
       item.outputPreviewUrl = URL.createObjectURL(outputBlob)
       item.status = 'completed'
     } catch (error) {
-      item.status = 'error'
+      item.status = error instanceof DOMException && error.name === 'AbortError' ? 'queued' : 'error'
       item.errorMessage =
         error instanceof Error ? error.message : 'Green screen tidak dapat dihapus.'
     }
@@ -438,12 +417,14 @@ export function useGreenScreenRemover() {
     item.errorMessage = ''
     processingMode.value = 'editor'
     isProcessing.value = true
+    const controller = new AbortController()
+    processingController = controller
 
     try {
       const sourceBlob = await canvasToPngBlob(sourceCanvas)
       let outputBlob: Blob
       if (supportsOffscreenImageProcessing()) {
-        outputBlob = (await processGreenScreenInWorker({ source: sourceBlob, tolerance: tolerance.value, softness: softness.value, keyColor, autoDetect: false, maxPixels: adaptiveMaxPixels })).outputBlob
+        outputBlob = (await processGreenScreenInWorker({ source: sourceBlob, tolerance: tolerance.value, softness: softness.value, keyColor, autoDetect: false, maxPixels: adaptiveMaxPixels }, controller.signal)).outputBlob
       } else {
         const context = sourceCanvas.getContext('2d', { willReadFrequently: true })
         if (!context) throw new Error('Browser tidak dapat membaca hasil edit.')
@@ -471,6 +452,7 @@ export function useGreenScreenRemover() {
     } finally {
       isProcessing.value = false
       processingMode.value = null
+      processingController = null
     }
   }
 
@@ -480,6 +462,8 @@ export function useGreenScreenRemover() {
     errorMessage.value = ''
     processingMode.value = force ? 'settings' : 'automatic'
     isProcessing.value = true
+    const controller = new AbortController()
+    processingController = controller
     const selectedTolerance = tolerance.value
     const selectedSoftness = softness.value
     const queue = force
@@ -492,13 +476,19 @@ export function useGreenScreenRemover() {
 
     try {
       for (const item of queue) {
-        await processItem(item, selectedTolerance, selectedSoftness)
+        if (controller.signal.aborted) break
+        await processItem(item, selectedTolerance, selectedSoftness, controller.signal)
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
       }
     } finally {
       isProcessing.value = false
       processingMode.value = null
+      processingController = null
     }
+  }
+
+  function cancelProcessing() {
+    processingController?.abort()
   }
 
   function reset() {
@@ -513,6 +503,7 @@ export function useGreenScreenRemover() {
   }
 
   onBeforeUnmount(() => {
+    processingController?.abort()
     for (const item of items.value) {
       revokeUrl(item.inputPreviewUrl)
       revokeUrl(item.outputPreviewUrl)
@@ -537,6 +528,7 @@ export function useGreenScreenRemover() {
     addFiles,
     removeItem,
     processAll,
+    cancelProcessing,
     applyEditor,
     reset,
   }

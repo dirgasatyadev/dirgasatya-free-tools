@@ -6,6 +6,8 @@ import {
   describeCron,
   getNextCronExecutions,
   parseCronExpression,
+  quartzDowToUnix,
+  unixDowToQuartz,
 } from '@/composables/useCronTools'
 
 describe('cron expression builder', () => {
@@ -45,5 +47,20 @@ describe('cron expression builder', () => {
   it('membangun dialect Quartz dengan field unspecified', () => {
     const state = parseCronExpression('0 9 * * MON-FRI')
     expect(buildCronExpression(state, 'quartz')).toBe('0 0 9 ? * MON-FRI')
+  })
+
+  it('memetakan weekday numeric canonical ke codec Quartz 1–7', () => {
+    expect(unixDowToQuartz(0)).toBe(1)
+    expect(unixDowToQuartz(1)).toBe(2)
+    expect(unixDowToQuartz(6)).toBe(7)
+    expect(quartzDowToUnix(1)).toBe(0)
+    expect(quartzDowToUnix(2)).toBe(1)
+    expect(quartzDowToUnix(7)).toBe(6)
+
+    const monday = parseCronExpression('0 9 * * 1')
+    expect(buildCronExpression(monday, 'quartz')).toBe('0 0 9 ? * 2')
+    expect(buildCronExpression(parseCronExpression('0 0 9 ? * 7', 'quartz'))).toBe('0 9 * * 6')
+    const preview = getNextCronExecutions('0 0 9 ? * 2', { dialect: 'quartz', timeZone: 'UTC', from: new Date('2026-01-04T08:58:00Z'), count: 1 })
+    expect(preview[0]?.toISOString()).toBe('2026-01-05T09:00:00.000Z')
   })
 })

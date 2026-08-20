@@ -15,8 +15,38 @@ export const maxZipEntries = 2_000
 export const maxZipSelectedEntries = 250
 export const maxZipEntrySize = 256 * 1024 * 1024
 export const maxZipSelectedSize = 512 * 1024 * 1024
+export const maxZipCreateFiles = 1_000
+export const zipCreateWarningSize = 500 * 1024 * 1024
 export const maxZipCompressionRatio = 200
 const maxZipDeclaredSize = 20 * 1024 * 1024 * 1024
+
+function deviceMemoryGb() {
+  if (typeof navigator === 'undefined') return undefined
+  return (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+}
+
+export function getAdaptiveZipExtractionLimit(memoryGb = deviceMemoryGb()) {
+  if (!memoryGb) return 256 * 1024 * 1024
+  if (memoryGb <= 2) return 128 * 1024 * 1024
+  if (memoryGb <= 4) return 256 * 1024 * 1024
+  return maxZipSelectedSize
+}
+
+export function getAdaptiveZipCreateLimit(memoryGb = deviceMemoryGb()) {
+  if (!memoryGb) return 512 * 1024 * 1024
+  if (memoryGb <= 2) return 256 * 1024 * 1024
+  if (memoryGb <= 4) return 512 * 1024 * 1024
+  if (memoryGb <= 8) return 1024 * 1024 * 1024
+  return 2 * 1024 * 1024 * 1024
+}
+
+export function validateZipCreation(files: Pick<File, 'size'>[], maxSourceSize = getAdaptiveZipCreateLimit()) {
+  if (!files.length) throw new Error('Pilih minimal satu file.')
+  if (files.length > maxZipCreateFiles) throw new Error(`Maksimal ${maxZipCreateFiles.toLocaleString('id-ID')} file per ZIP.`)
+  const totalSize = files.reduce((total, file) => total + file.size, 0)
+  if (totalSize > maxSourceSize) throw new Error(`Total file sumber melebihi budget memory ${Math.round(maxSourceSize / (1024 * 1024))} MB pada perangkat ini.`)
+  return { totalSize, warning: totalSize > zipCreateWarningSize }
+}
 
 export function getZipEntrySafetyIssue(entry: Pick<ZipEntryInfo, 'compressedSize' | 'uncompressedSize' | 'directory'>) {
   if (entry.directory) return ''
@@ -28,14 +58,14 @@ export function getZipEntrySafetyIssue(entry: Pick<ZipEntryInfo, 'compressedSize
   return ''
 }
 
-export function validateZipSelection(entries: ZipEntryInfo[], selectedIndices: number[]) {
+export function validateZipSelection(entries: ZipEntryInfo[], selectedIndices: number[], maxSelectedSize = getAdaptiveZipExtractionLimit()) {
   const selected = entries.filter((entry) => selectedIndices.includes(entry.index) && !entry.directory)
   if (!selected.length) throw new Error('Pilih minimal satu file yang aman untuk diekstrak.')
   if (selected.length > maxZipSelectedEntries) throw new Error(`Maksimal ${maxZipSelectedEntries} file per ekstraksi.`)
   const unsafe = selected.find((entry) => entry.safetyIssue)
   if (unsafe) throw new Error(`${unsafe.name}: ${unsafe.safetyIssue}`)
   const totalSize = selected.reduce((total, entry) => total + entry.uncompressedSize, 0)
-  if (totalSize > maxZipSelectedSize) throw new Error('Total hasil terpilih melebihi batas memory 512 MB.')
+  if (totalSize > maxSelectedSize) throw new Error(`Total hasil terpilih melebihi batas memory ${Math.round(maxSelectedSize / (1024 * 1024))} MB.`)
   return { selected, totalSize }
 }
 
@@ -54,15 +84,16 @@ export function uniqueArchiveNames(files: File[]) {
   })
 }
 
-export async function createZipArchive(files: File[], level = 6, onProgress?: (completed: number, total: number) => void) {
-  if (!files.length) throw new Error('Pilih minimal satu file.')
+export async function createZipArchive(files: File[], level = 6, onProgress?: (completed: number, total: number) => void, signal?: AbortSignal) {
+  validateZipCreation(files)
   const { BlobReader, BlobWriter, ZipWriter } = await import('@zip.js/zip.js')
   const blobWriter = new BlobWriter('application/zip')
   const writer = new ZipWriter(blobWriter)
   const names = uniqueArchiveNames(files)
   try {
     for (let index = 0; index < files.length; index += 1) {
-      await writer.add(names[index]!, new BlobReader(files[index]!), { level })
+      if (signal?.aborted) throw new DOMException('Pembuatan ZIP dibatalkan.', 'AbortError')
+      await writer.add(names[index]!, new BlobReader(files[index]!), { level, signal })
       onProgress?.(index + 1, files.length)
     }
     await writer.close()
@@ -109,7 +140,8 @@ export async function extractZipFiles(file: Blob, selectedIndices: number[], onP
       info.safetyIssue = getZipEntrySafetyIssue(info)
       return info
     })
-    validateZipSelection(metadata, selectedIndices)
+    const maxSelectedSize = getAdaptiveZipExtractionLimit()
+    validateZipSelection(metadata, selectedIndices, maxSelectedSize)
     const fileEntries = entries.filter((entry, index) => selectedIndices.includes(index) && !entry.directory)
     const extracted: ExtractedZipFile[] = []
     let extractedBytes = 0
@@ -120,7 +152,7 @@ export async function extractZipFiles(file: Blob, selectedIndices: number[], onP
       const blob = await entry.getData(new BlobWriter(), {
         signal: controller.signal,
         onprogress: (entryBytes) => {
-          if (entryBytes > maxZipEntrySize || extractedBytes + entryBytes > maxZipSelectedSize) {
+          if (entryBytes > maxZipEntrySize || extractedBytes + entryBytes > maxSelectedSize) {
             controller.abort('Batas aman ekstraksi ZIP terlampaui.')
             throw new Error('Ekstraksi dihentikan karena ukuran aktual melebihi batas memory.')
           }

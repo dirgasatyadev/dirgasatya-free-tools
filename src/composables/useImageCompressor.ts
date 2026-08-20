@@ -1,6 +1,8 @@
 import imageCompression from 'browser-image-compression'
 import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { useImageBatchQueue } from '@/composables/image/useImageBatchQueue'
+import { createUniqueFileName, normalizeImageBaseName } from '@/composables/image/fileNaming'
+import { getAdaptiveCompressorPixelLimit } from '@/composables/imageSafety'
 
 export const maxCompressImageFiles = 100
 export const defaultCompressQuality = 75
@@ -72,16 +74,7 @@ export function createCompressedBaseName(fileName: string) {
 }
 
 export function normalizeCompressedBaseName(fileName: string) {
-  const withoutExtension = fileName.replace(/\.(?:png|webp|jpe?g)$/i, '')
-  const withoutControlCharacters = Array.from(withoutExtension)
-    .filter((character) => character.charCodeAt(0) >= 32)
-    .join('')
-  const safeBaseName = withoutControlCharacters
-    .replace(/[<>:"/\\|?*]/g, '-')
-    .replace(/[. ]+$/g, '')
-    .trim()
-    .slice(0, 180)
-  return safeBaseName || 'compressed'
+  return normalizeImageBaseName(fileName.replace(/\.(?:png|webp|jpe?g)$/i, ''), 'compressed')
 }
 
 export function normalizeCompressedFileName(baseName: string, extension: string) {
@@ -93,22 +86,14 @@ export function createUniqueCompressedFileName(
   extension: string,
   usedFileNames: Set<string>,
 ) {
-  const normalizedBaseName = normalizeCompressedBaseName(baseName)
-  let fileName = `${normalizedBaseName}.${extension}`
-  let suffix = 2
-  while (usedFileNames.has(fileName.toLocaleLowerCase('en'))) {
-    fileName = `${normalizedBaseName}-${suffix}.${extension}`
-    suffix += 1
-  }
-  usedFileNames.add(fileName.toLocaleLowerCase('en'))
-  return fileName
+  return createUniqueFileName(normalizeCompressedBaseName(baseName), extension, usedFileNames)
 }
 
-export function validateCompressImageDimensions(width: number, height: number) {
+export function validateCompressImageDimensions(width: number, height: number, maxPixels = maxCompressImagePixels) {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     return 'Dimensi gambar tidak valid.'
   }
-  if (width * height > maxCompressImagePixels) return 'Resolusi gambar maksimal 40 megapiksel.'
+  if (width * height > maxPixels) return `Resolusi gambar maksimal ${Math.round(maxPixels / 1_000_000)} megapiksel pada perangkat ini.`
   return null
 }
 
@@ -174,6 +159,7 @@ export function useImageCompressor() {
   const errorMessage = ref('')
   let itemSequence = 0
   let processingController: AbortController | null = null
+  const adaptiveMaxPixels = getAdaptiveCompressorPixelLimit()
 
   const { completedCount, failedCount, processedCount, progressPercentage, hasProcessableItems } = useImageBatchQueue(items)
 
@@ -219,7 +205,7 @@ export function useImageCompressor() {
 
     try {
       bitmap = await createImageBitmap(item.file)
-      const dimensionError = validateCompressImageDimensions(bitmap.width, bitmap.height)
+      const dimensionError = validateCompressImageDimensions(bitmap.width, bitmap.height, adaptiveMaxPixels)
       if (dimensionError) throw new Error(dimensionError)
       const output = await compressFile(
         item.file,
@@ -300,7 +286,7 @@ export function useImageCompressor() {
     if (isProcessing.value) return false
     const item = items.value.find((candidate) => candidate.id === itemId)
     if (!item) return false
-    const dimensionError = validateCompressImageDimensions(canvas.width, canvas.height)
+    const dimensionError = validateCompressImageDimensions(canvas.width, canvas.height, adaptiveMaxPixels)
     if (dimensionError) {
       item.errorMessage = dimensionError
       return false
@@ -381,6 +367,7 @@ export function useImageCompressor() {
 
   return {
     items,
+    adaptiveMaxPixels,
     quality,
     compressionMode,
     targetSizeMb,

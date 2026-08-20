@@ -103,6 +103,32 @@ export function cronFieldToExpression(field: CronFieldValue, definition: CronFie
   return validateCronFieldExpression(field.custom, definition)
 }
 
+function mapCronBaseAtoms(expression: string, mapper: (value: number) => number) {
+  return expression.split(',').map((part) => {
+    const [base, step] = part.split('/')
+    const mappedBase = base === '*' ? base : base!.split('-').map((atom) => /^\d+$/.test(atom) ? String(mapper(Number(atom))) : atom).join('-')
+    return step === undefined ? mappedBase : `${mappedBase}/${step}`
+  }).join(',')
+}
+
+export function unixDowToQuartz(value: number) {
+  if (!Number.isInteger(value) || value < 0 || value > 6) throw new Error('Unix weekday must be 0–6.')
+  return value + 1
+}
+
+export function quartzDowToUnix(value: number) {
+  if (!Number.isInteger(value) || value < 1 || value > 7) throw new Error('Quartz weekday must be 1–7.')
+  return value - 1
+}
+
+export function encodeQuartzDayOfWeek(expression: string) {
+  return mapCronBaseAtoms(expression, unixDowToQuartz)
+}
+
+export function decodeQuartzDayOfWeek(expression: string) {
+  return mapCronBaseAtoms(expression, quartzDowToUnix)
+}
+
 export function buildCronExpression(state: CronBuilderState, dialect: CronDialect = 'unix') {
   const fields = cronFieldDefinitions.map((definition) => cronFieldToExpression(state[definition.key], definition))
   if (dialect !== 'quartz') return fields.join(' ')
@@ -111,6 +137,7 @@ export function buildCronExpression(state: CronBuilderState, dialect: CronDialec
   if (domRestricted && dowRestricted) throw new Error('Quartz requires either Day of month or Day of week to be unspecified (?).')
   if (dowRestricted) fields[2] = '?'
   else fields[4] = '?'
+  if (fields[4] !== '?') fields[4] = encodeQuartzDayOfWeek(fields[4]!)
   return ['0', ...fields].join(' ')
 }
 
@@ -139,6 +166,7 @@ export function parseCronExpression(expression: string, dialect: CronDialect = '
     fields = segments.slice(1)
     if (fields[2] === '?') fields[2] = '*'
     if (fields[4] === '?') fields[4] = '*'
+    else fields[4] = decodeQuartzDayOfWeek(fields[4]!)
   } else if (segments.length !== 5) throw new Error(`${dialect === 'github' ? 'GitHub Actions' : 'Unix'} cron must have 5 fields.`)
   const state = createCronBuilderState()
   cronFieldDefinitions.forEach((definition, index) => setFieldFromExpression(state[definition.key], fields[index]!, definition))
@@ -174,7 +202,7 @@ function expandPart(part: string, definition: CronFieldDefinition) {
   if (base !== '*') {
     const [startText, endText] = base!.split('-')
     start = parseAtom(startText!, definition)
-    end = endText === undefined ? start : parseAtom(endText, definition)
+    end = endText === undefined ? (stepText ? definition.max : start) : parseAtom(endText, definition)
   }
   const values: number[] = []
   for (let value = start; value <= end; value += step) values.push(value)

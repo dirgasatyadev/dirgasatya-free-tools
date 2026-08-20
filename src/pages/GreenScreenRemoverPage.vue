@@ -39,6 +39,7 @@ const {
   addFiles,
   removeItem,
   processAll,
+  cancelProcessing,
   applyEditor,
   reset,
 } = useGreenScreenRemover()
@@ -609,7 +610,7 @@ async function downloadAll() {
           </div>
 
           <div v-if="items.length && processedCount < items.length && isProcessing" class="mt-6 rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
-            <p class="flex items-center gap-2 text-sm font-bold text-emerald-700 dark:text-emerald-300" role="status" aria-live="polite"><Icon icon="mdi:loading" class="size-4 animate-spin" aria-hidden="true" /> {{ processingMode === 'settings' ? 'Menerapkan pengaturan' : 'Memproses otomatis' }} {{ Math.min(processedCount + 1, items.length) }} dari {{ items.length }}...</p>
+            <div class="flex items-center justify-between gap-3"><p class="flex items-center gap-2 text-sm font-bold text-emerald-700 dark:text-emerald-300" role="status" aria-live="polite"><Icon icon="mdi:loading" class="size-4 animate-spin" aria-hidden="true" /> {{ processingMode === 'settings' ? 'Menerapkan pengaturan' : 'Memproses otomatis' }} {{ Math.min(processedCount + 1, items.length) }} dari {{ items.length }}...</p><button type="button" class="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300" @click="cancelProcessing">Batalkan</button></div>
             <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" role="progressbar" :aria-valuenow="progressPercentage" aria-valuemin="0" aria-valuemax="100"><div class="h-full rounded-full bg-emerald-600 transition-[width] duration-300" :style="{ width: `${progressPercentage}%` }"></div></div>
           </div>
 
