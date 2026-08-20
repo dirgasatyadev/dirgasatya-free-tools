@@ -1,38 +1,55 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import $ from 'jquery'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import SearchableCategorySelect from '@/components/SearchableCategorySelect.vue'
 
 let wrapper: VueWrapper | undefined
 
-afterEach(() => {
-  wrapper?.unmount()
-  document.body.innerHTML = ''
-})
+afterEach(() => wrapper?.unmount())
+
+function mountSelect() {
+  wrapper = mount(SearchableCategorySelect, {
+    attachTo: document.body,
+    props: {
+      modelValue: 'Semua',
+      options: [
+        { value: 'Semua', label: 'Semua (2)' },
+        { value: 'Image', label: 'Image (2)' },
+        { value: 'PDF', label: 'PDF (0)' },
+      ],
+    },
+  })
+  return wrapper
+}
 
 describe('SearchableCategorySelect', () => {
-  it('mengaktifkan pencarian Select2 dan meneruskan kategori yang dipilih', async () => {
-    wrapper = mount(SearchableCategorySelect, {
-      attachTo: document.body,
-      props: {
-        modelValue: 'Semua',
-        options: [
-          { value: 'Semua', label: 'Semua (14)' },
-          { value: 'PDF', label: 'PDF (1)' },
-        ],
-      },
-    })
-    await flushPromises()
+  it('menggunakan dropdown kustom tanpa select bawaan browser', async () => {
+    const select = mountSelect()
 
-    expect(document.querySelector('.select2-container')).not.toBeNull()
+    expect(select.find('select').exists()).toBe(false)
+    await select.get('[role="combobox"]').trigger('click')
+    expect(select.get('[role="combobox"]').attributes('aria-expanded')).toBe('true')
+    expect(select.findAll('[role="option"]')).toHaveLength(3)
+  })
 
-    const nativeSelect = wrapper.get('select').element as HTMLSelectElement
-    $(nativeSelect).select2('open')
-    await flushPromises()
-    expect(document.querySelector('.select2-search__field')).not.toBeNull()
+  it('mencari dan meneruskan kategori yang dipilih', async () => {
+    const select = mountSelect()
+    await select.get('[role="combobox"]').trigger('click')
+    await select.get('[role="searchbox"]').setValue('pdf')
 
-    await wrapper.get('select').setValue('PDF')
-    const emittedValues = wrapper.emitted('update:modelValue') ?? []
+    const options = select.findAll('[role="option"]')
+    expect(options).toHaveLength(1)
+    expect(options[0]?.text()).toContain('PDF')
+    await options[0]?.trigger('click')
+
+    const emittedValues = select.emitted('update:modelValue') ?? []
     expect(emittedValues[emittedValues.length - 1]).toEqual(['PDF'])
+  })
+
+  it('menampilkan pesan ketika kategori tidak ditemukan', async () => {
+    const select = mountSelect()
+    await select.get('[role="combobox"]').trigger('click')
+    await select.get('[role="searchbox"]').setValue('kategori asing')
+
+    expect(select.text()).toContain('Kategori tidak ditemukan')
   })
 })

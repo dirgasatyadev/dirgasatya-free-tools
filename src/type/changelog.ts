@@ -1,5 +1,13 @@
-export type ChangeType = 'Baru' | 'Peningkatan' | 'Infrastruktur'
-export type ChangelogScope = 'Platform' | 'PNG to AVIF' | 'Green Screen Remover'
+export type ChangeType = 'Baru' | 'Peningkatan' | 'Infrastruktur' | 'Keamanan'
+export type ChangelogScope =
+  | 'Platform'
+  | 'PNG to AVIF'
+  | 'Green Screen Remover'
+  | 'PNG to WebP'
+  | 'Compress Image'
+  | 'SVG Maker'
+  | 'Favicon Generator'
+  | 'Security & Developer'
 
 export interface ChangeItem {
   type: ChangeType

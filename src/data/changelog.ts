@@ -2,6 +2,190 @@ import type { ChangelogEntry } from '@/type/changelog'
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.9.0',
+    date: '20 Agustus 2026',
+    title: 'Favicon Generator',
+    description:
+      'Generator paket favicon PNG untuk browser, perangkat Apple, PWA, Android, dan master image.',
+    scope: 'Favicon Generator',
+    icon: 'mdi:web-box',
+    latest: true,
+    changes: [
+      {
+        type: 'Baru',
+        text: 'Menghasilkan PNG ukuran 16, 32, 48, 64, 96, 120, 152, 167, 180, 192, 384, 512, dan 1024 piksel.',
+      },
+      {
+        type: 'Baru',
+        text: 'Input diwajibkan PNG dengan validasi ukuran maksimal 25 MB dan resolusi maksimal 40 megapiksel.',
+      },
+      {
+        type: 'Baru',
+        text: 'Mode contain dan cover tersedia dengan pilihan background transparan atau warna khusus.',
+      },
+      {
+        type: 'Peningkatan',
+        text: 'Setiap ukuran memiliki preview dan download PNG sendiri, serta dapat diunduh sekaligus melalui ZIP atau penyimpanan langsung.',
+      },
+      {
+        type: 'Peningkatan',
+        text: 'Daftar ukuran dirapikan menjadi dua kartu per baris dengan pilihan semua, kosongkan pilihan, dan checkbox per ukuran.',
+      },
+      {
+        type: 'Baru',
+        text: 'Paket dapat berisi semua ukuran atau hanya ukuran terpilih dan selalu menyertakan manifest.webmanifest.',
+      },
+      {
+        type: 'Baru',
+        text: 'Input URL website digunakan untuk membentuk URL aset ikon pada manifest, dengan fallback URL relatif dari root.',
+      },
+      {
+        type: 'Keamanan',
+        text: 'Seluruh resize dan pembuatan favicon berjalan secara lokal tanpa mengunggah PNG sumber.',
+      },
+    ],
+  },
+  {
+    version: 'v0.8.0',
+    date: '20 Agustus 2026',
+    title: 'SVG Maker',
+    description:
+      'Editor vektor lokal untuk membuat, mengatur, menyalin, dan mengunduh SVG langsung dari browser.',
+    scope: 'SVG Maker',
+    icon: 'mdi:svg',
+    changes: [
+      {
+        type: 'Baru',
+        text: 'Menyediakan elemen kotak, lingkaran, elips, garis, dan teks dengan preview SVG langsung.',
+      },
+      {
+        type: 'Baru',
+        text: 'Elemen dapat dipindahkan dengan drag serta diatur posisi, ukuran, warna, garis, opacity, dan tipografinya.',
+      },
+      {
+        type: 'Baru',
+        text: 'Layer dapat dipilih, diurutkan, diduplikasi, dan dihapus dari panel editor.',
+      },
+      {
+        type: 'Peningkatan',
+        text: 'Path kini mempunyai node yang dapat ditambah dari kanvas, dipilih, dipindahkan, diatur koordinatnya, dan dihapus.',
+      },
+      {
+        type: 'Peningkatan',
+        text: 'Kotak memiliki empat node sudut untuk mengubah ukuran, sedangkan elips memiliki empat node sumbu untuk mengatur pusat dan radius.',
+      },
+      {
+        type: 'Peningkatan',
+        text: 'Preset polygon dan bintang berbasis node tersedia dengan opsi path terbuka atau tertutup.',
+      },
+      {
+        type: 'Peningkatan',
+        text: 'Kanvas dilengkapi grid, snap-to-grid yang dapat diatur, serta zoom 50% sampai 200%.',
+      },
+      {
+        type: 'Peningkatan',
+        text: 'Ukuran dokumen dan background dapat disesuaikan, termasuk background transparan.',
+      },
+      {
+        type: 'Keamanan',
+        text: 'Kode SVG dibuat secara lokal dengan escaping karakter pada teks dan dapat disalin atau diunduh tanpa upload.',
+      },
+    ],
+  },
+  {
+    version: 'v0.7.0',
+    date: '20 Agustus 2026',
+    title: 'Compress Image',
+    description:
+      'Kompresor gambar lokal untuk PNG, WebP, JPG, dan JPEG dengan editor crop serta workflow antar-tool.',
+    scope: 'Compress Image',
+    icon: 'mdi:image-size-select-small',
+    changes: [
+      {
+        type: 'Baru',
+        text: 'Mengompres hingga 100 gambar secara otomatis dan bertahap langsung di browser.',
+      },
+      {
+        type: 'Baru',
+        text: 'Mendukung PNG, WebP, JPG, dan JPEG dengan kualitas awal 75% serta format asli yang dipertahankan.',
+      },
+      {
+        type: 'Baru',
+        text: 'Editor crop menyediakan bentuk kotak dan lingkaran; hasil lingkaran menjadi PNG transparan.',
+      },
+      {
+        type: 'Peningkatan',
+        text: 'Preview, perubahan nama, unduhan satuan, ZIP, penyimpanan langsung, dan transfer ke tool kompatibel tersedia untuk hasil terbaru.',
+      },
+      {
+        type: 'Keamanan',
+        text: 'Gambar diproses secara lokal dan metadata tidak disimpan pada hasil kompresi.',
+      },
+    ],
+  },
+  {
+    version: 'v0.6.0',
+    date: '20 Agustus 2026',
+    title: 'PNG to WebP',
+    description:
+      'Konverter WebP lokal dengan antrean otomatis, preview hasil, download massal, dan workflow antar-tool.',
+    scope: 'PNG to WebP',
+    icon: 'mdi:image-sync-outline',
+    changes: [
+      {
+        type: 'Baru',
+        text: 'Mengonversi hingga 100 PNG menjadi WebP secara otomatis dan bertahap langsung di browser.',
+      },
+      {
+        type: 'Baru',
+        text: 'Kualitas WebP dapat diatur sebelum upload dengan nilai awal 82%.',
+      },
+      {
+        type: 'Baru',
+        text: 'Preview PNG dan WebP, perubahan nama file, download satuan, ZIP, serta penyimpanan langsung tersedia.',
+      },
+      {
+        type: 'Peningkatan',
+        text: 'Hasil WebP dapat diteruskan ke Green Screen Remover, dan hasil PNG yang kompatibel dapat dikirim kembali ke PNG to WebP.',
+      },
+      {
+        type: 'Keamanan',
+        text: 'Encoder WebP berjalan secara lokal dan memvalidasi MIME hasil agar browser tidak menghasilkan format yang keliru.',
+      },
+    ],
+  },
+  {
+    version: 'v0.5.0',
+    date: '20 Agustus 2026',
+    title: 'Developer & Security Tools',
+    description:
+      'Lima utilitas kriptografi baru untuk password hashing, digest teks, dan pembuatan JWT langsung di browser.',
+    scope: 'Security & Developer',
+    icon: 'mdi:shield-key-outline',
+    changes: [
+      {
+        type: 'Baru',
+        text: 'Bcrypt Encoder & Decoder membuat encoded hash dengan salt acak dan memverifikasi password tanpa mendekripsi hash.',
+      },
+      {
+        type: 'Baru',
+        text: 'Argon2id Encoder & Decoder menyediakan pengaturan memory, iterations, parallelism, hash length, dan verifikasi password.',
+      },
+      {
+        type: 'Baru',
+        text: 'SHA-256 Generator dan SHA-512 Generator menghasilkan digest teks otomatis melalui Web Crypto API.',
+      },
+      {
+        type: 'Baru',
+        text: 'JWT Generator membuat token HMAC dengan algoritma HS256, HS384, atau HS512 dari header dan payload JSON.',
+      },
+      {
+        type: 'Keamanan',
+        text: 'Password, secret, payload, dan hasil kriptografi diproses secara lokal tanpa dikirim ke server.',
+      },
+    ],
+  },
+  {
     version: 'v0.4.0',
     date: '20 Agustus 2026',
     title: 'Green Screen Remover',
@@ -9,7 +193,6 @@ export const changelog: ChangelogEntry[] = [
       'Tool penghapus green screen berbasis browser dengan kontrol warna, crop, dan dukungan pemrosesan massal.',
     scope: 'Green Screen Remover',
     icon: 'mdi:account-box-outline',
-    latest: true,
     changes: [
       {
         type: 'Baru',
@@ -143,7 +326,11 @@ export const changelog: ChangelogEntry[] = [
       },
       {
         type: 'Baru',
-        text: 'Filter kategori menggunakan Select2 dan mendukung pencarian kategori.',
+        text: 'Filter kategori menggunakan dropdown kustom dengan pencarian tanpa select bawaan browser.',
+      },
+      {
+        type: 'Baru',
+        text: 'Katalog Free Tools dapat ditampilkan dalam mode list, grid, atau table.',
       },
       {
         type: 'Peningkatan',

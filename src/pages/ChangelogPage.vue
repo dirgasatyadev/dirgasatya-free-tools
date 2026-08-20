@@ -8,6 +8,7 @@ const badgeClasses: Record<ChangeType, string> = {
   Baru: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
   Peningkatan: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
   Infrastruktur: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  Keamanan: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300',
 }
 
 const scopeClasses: Record<ChangelogScope, string> = {
@@ -15,6 +16,12 @@ const scopeClasses: Record<ChangelogScope, string> = {
   'PNG to AVIF': 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
   'Green Screen Remover':
     'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+  'PNG to WebP': 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
+  'Compress Image': 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
+  'SVG Maker': 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300',
+  'Favicon Generator': 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  'Security & Developer':
+    'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
 }
 </script>
 

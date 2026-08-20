@@ -18,4 +18,37 @@ describe('tool transfer helpers', () => {
 
     expect(targets.map((tool) => tool.toolKey)).toEqual(['green-screen-remover'])
   })
+
+  it('menghubungkan hasil WebP ke Green Screen Remover', () => {
+    const targets = getCompatibleTransferTargets('png-to-webp', [
+      { blob: new Blob(['webp'], { type: 'image/webp' }), fileName: 'hasil.webp' },
+    ])
+
+    expect(targets.map((tool) => tool.toolKey)).toEqual([
+      'green-screen-remover',
+      'compress-image',
+    ])
+  })
+
+  it('menawarkan kedua konverter untuk hasil PNG yang kompatibel', () => {
+    const targets = getCompatibleTransferTargets('green-screen-remover', [
+      { blob: new Blob(['png'], { type: 'image/png' }), fileName: 'hasil.png' },
+    ])
+
+    expect(targets.map((tool) => tool.toolKey)).toEqual([
+      'png-to-avif',
+      'png-to-webp',
+      'compress-image',
+      'favicon-generator',
+    ])
+  })
+
+  it('menghubungkan hasil Compress Image ke tool yang menerima seluruh format hasil', () => {
+    const targets = getCompatibleTransferTargets('compress-image', [
+      { blob: new Blob(['png'], { type: 'image/png' }), fileName: 'satu.png' },
+      { blob: new Blob(['jpg'], { type: 'image/jpeg' }), fileName: 'dua.jpg' },
+    ])
+
+    expect(targets.map((tool) => tool.toolKey)).toEqual(['green-screen-remover'])
+  })
 })

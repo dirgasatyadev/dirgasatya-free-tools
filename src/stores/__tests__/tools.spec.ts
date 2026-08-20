@@ -17,6 +17,15 @@ describe('tools store', () => {
     expect(store.visibleTools.map((tool) => tool.name)).toEqual([
       'PNG to AVIF',
       'Green Screen Remover',
+      'Bcrypt Encoder & Decoder',
+      'Argon2id Encoder & Decoder',
+      'SHA-256 Generator',
+      'SHA-512 Generator',
+      'JWT Generator',
+      'PNG to WebP',
+      'Compress Image',
+      'SVG Maker',
+      'Favicon Generator',
     ])
     expect(store.hasMore).toBe(false)
     expect(store.remainingCount).toBe(0)
@@ -48,13 +57,13 @@ describe('tools store', () => {
     const store = useToolsStore()
     store.selectedCategory = 'Image'
 
-    expect(store.filteredTools).toHaveLength(2)
+    expect(store.filteredTools).toHaveLength(4)
     expect(store.filteredTools.every((tool) => tool.category === 'Image')).toBe(true)
   })
 
   it('mengosongkan hasil saat kategori tidak mempunyai tool aktif', () => {
     const store = useToolsStore()
-    store.selectedCategory = 'Developer'
+    store.selectedCategory = 'Text'
 
     expect(store.filteredTools).toEqual([])
   })

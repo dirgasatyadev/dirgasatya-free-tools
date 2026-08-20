@@ -12,6 +12,7 @@ export type ToolCategory =
   | 'Web'
   | 'Data'
 export type ToolFilterCategory = 'Semua' | ToolCategory
+export type ToolViewMode = 'list' | 'grid' | 'table'
 
 export interface FreeTool {
   id: number
