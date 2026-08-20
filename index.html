@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="/favicon.ico">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Kumpulan free tool praktis untuk developer, kreator, dan pekerja digital.">
+    <title>Dirgasatya Free Tools</title>
+    <script>
+      const savedTheme = localStorage.getItem('dirgasatya-theme')
+      const initialTheme = savedTheme === 'light' || savedTheme === 'dark'
+        ? savedTheme
+        : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+
+      document.documentElement.classList.toggle('dark', initialTheme === 'dark')
+      document.documentElement.style.colorScheme = initialTheme
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
