@@ -41,7 +41,7 @@ export const tools: FreeTool[] = [
   {
     id: 3,
     toolKey: 'bcrypt-encoder-decoder',
-    name: 'Bcrypt Encoder & Decoder',
+    name: 'Bcrypt Hash Generator & Verifier',
     description: 'Buat hash Bcrypt dan verifikasi kecocokan password langsung di browser.',
     category: 'Security & Privacy',
     icon: 'mdi:shield-key-outline',
@@ -52,7 +52,7 @@ export const tools: FreeTool[] = [
   {
     id: 4,
     toolKey: 'argon2id-encoder-decoder',
-    name: 'Argon2id Encoder & Decoder',
+    name: 'Argon2id Hash Generator & Verifier',
     description: 'Buat dan verifikasi password hash Argon2id dengan parameter yang dapat disesuaikan.',
     category: 'Security & Privacy',
     icon: 'mdi:shield-lock-outline',
@@ -137,4 +137,14 @@ export const tools: FreeTool[] = [
     inputMimeTypes: ['image/png'],
     status: 'available',
   },
+  { id: 12, toolKey: 'json-formatter-validator', name: 'JSON Formatter & Validator', description: 'Format, minify, dan validasi JSON langsung di browser.', category: 'Developer', icon: 'mdi:code-json', path: '/tools/json-formatter-validator', inputMimeTypes: [], status: 'available' },
+  { id: 13, toolKey: 'base64-encoder-decoder', name: 'Base64 Encoder & Decoder', description: 'Encode dan decode teks UTF-8 ke Base64 secara lokal.', category: 'Developer', icon: 'mdi:file-code-outline', path: '/tools/base64-encoder-decoder', inputMimeTypes: [], status: 'available' },
+  { id: 14, toolKey: 'url-encoder-decoder', name: 'URL Encoder & Decoder', description: 'Encode dan decode URL lengkap atau komponennya.', category: 'Developer', icon: 'mdi:link-variant', path: '/tools/url-encoder-decoder', inputMimeTypes: [], status: 'available' },
+  { id: 15, toolKey: 'uuid-generator', name: 'UUID Generator', description: 'Buat hingga 100 UUID versi 4 menggunakan random kriptografis.', category: 'Developer', icon: 'mdi:identifier', path: '/tools/uuid-generator', inputMimeTypes: [], status: 'available' },
+  { id: 16, toolKey: 'jwt-decoder-verifier', name: 'JWT Decoder & Verifier', description: 'Decode JWT dan verifikasi signature HMAC HS256, HS384, atau HS512.', category: 'Security & Privacy', icon: 'mdi:key-chain', path: '/tools/jwt-decoder-verifier', inputMimeTypes: [], status: 'available' },
+  { id: 17, toolKey: 'regex-tester', name: 'Regex Tester', description: 'Uji JavaScript RegExp, capture group, dan preview replace.', category: 'Developer', icon: 'mdi:regex', path: '/tools/regex-tester', inputMimeTypes: [], status: 'available' },
+  { id: 18, toolKey: 'unix-timestamp-converter', name: 'Unix Timestamp Converter', description: 'Konversi timestamp detik atau milidetik ke tanggal dan sebaliknya.', category: 'Developer', icon: 'mdi:clock-convert-outline', path: '/tools/unix-timestamp-converter', inputMimeTypes: [], status: 'available' },
+  { id: 19, toolKey: 'word-counter', name: 'Word Counter', description: 'Hitung kata, karakter, kalimat, paragraf, baris, dan waktu baca.', category: 'Text', icon: 'mdi:counter', path: '/tools/word-counter', inputMimeTypes: [], status: 'available' },
+  { id: 20, toolKey: 'json-csv-converter', name: 'JSON ↔ CSV Converter', description: 'Konversikan JSON menjadi CSV dan CSV kembali menjadi JSON.', category: 'Data', icon: 'mdi:file-swap-outline', path: '/tools/json-csv-converter', inputMimeTypes: [], status: 'available' },
+  { id: 21, toolKey: 'meta-tag-generator', name: 'Meta Tag Generator', description: 'Buat meta tag SEO, Open Graph, dan Twitter Card siap pakai.', category: 'Web', icon: 'mdi:tag-text-outline', path: '/tools/meta-tag-generator', inputMimeTypes: [], status: 'available' },
 ]

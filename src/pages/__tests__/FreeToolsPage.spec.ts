@@ -55,13 +55,13 @@ describe('FreeToolsPage', () => {
   it('mengubah data antara tampilan grid, list, dan table', async () => {
     const page = mountPage()
 
-    expect(page.findAll('[data-layout="grid"]')).toHaveLength(11)
+    expect(page.findAll('[data-layout="grid"]')).toHaveLength(12)
 
     await page.get('[aria-label="Tampilan list"]').trigger('click')
-    expect(page.findAll('[data-layout="list"]')).toHaveLength(11)
+    expect(page.findAll('[data-layout="list"]')).toHaveLength(12)
 
     await page.get('[aria-label="Tampilan table"]').trigger('click')
     expect(page.find('table').exists()).toBe(true)
-    expect(page.findAll('tbody tr')).toHaveLength(11)
+    expect(page.findAll('tbody tr')).toHaveLength(12)
   })
 })

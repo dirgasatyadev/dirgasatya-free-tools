@@ -30,7 +30,9 @@ const verificationResult = ref<boolean | null>(null)
 const copied = ref(false)
 
 const isBcrypt = computed(() => props.algorithm === 'bcrypt')
-const toolName = computed(() => (isBcrypt.value ? 'Bcrypt Encoder & Decoder' : 'Argon2id Encoder & Decoder'))
+const toolName = computed(() =>
+  isBcrypt.value ? 'Bcrypt Hash Generator & Verifier' : 'Argon2id Hash Generator & Verifier',
+)
 const toolIcon = computed(() => (isBcrypt.value ? 'mdi:shield-key-outline' : 'mdi:shield-lock-outline'))
 const accentClasses = computed(() =>
   isBcrypt.value

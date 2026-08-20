@@ -2,6 +2,28 @@ import type { ChangelogEntry } from '@/type/changelog'
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.10.0',
+    date: '20 Agustus 2026',
+    title: 'Developer, Text & Data Tools',
+    description:
+      'Sepuluh tool browser-only baru untuk JSON, encoding, identifier, JWT, regex, waktu, teks, data, dan SEO.',
+    scope: 'Developer, Text & Data Tools',
+    icon: 'mdi:code-braces-box',
+    latest: true,
+    changes: [
+      { type: 'Baru', text: 'JSON Formatter & Validator menyediakan format, minify, pilihan indent, dan pesan validasi.' },
+      { type: 'Baru', text: 'Base64 Encoder & Decoder mendukung teks UTF-8, sedangkan URL Encoder & Decoder mendukung komponen dan URL lengkap.' },
+      { type: 'Baru', text: 'UUID Generator membuat hingga 100 UUID v4 menggunakan random kriptografis browser.' },
+      { type: 'Baru', text: 'JWT Decoder & Verifier membaca header/payload, status waktu, dan memverifikasi HMAC HS256, HS384, atau HS512.' },
+      { type: 'Baru', text: 'Regex Tester menampilkan match, index, capture group, dan preview replacement.' },
+      { type: 'Baru', text: 'Unix Timestamp Converter mendukung detik, milidetik, UTC, ISO, dan waktu lokal.' },
+      { type: 'Baru', text: 'Word Counter menghitung kata, karakter, kalimat, paragraf, baris, dan estimasi waktu baca.' },
+      { type: 'Baru', text: 'JSON ↔ CSV Converter mendukung quoted cell, newline, object bertingkat, salin, dan download hasil.' },
+      { type: 'Baru', text: 'Meta Tag Generator membuat SEO, Open Graph, dan Twitter Card beserta social preview.' },
+      { type: 'Keamanan', text: 'Seluruh input, secret, dan hasil diproses lokal tanpa dikirim ke server.' },
+    ],
+  },
+  {
     version: 'v0.9.0',
     date: '20 Agustus 2026',
     title: 'Favicon Generator',
@@ -9,7 +31,6 @@ export const changelog: ChangelogEntry[] = [
       'Generator paket favicon PNG untuk browser, perangkat Apple, PWA, Android, dan master image.',
     scope: 'Favicon Generator',
     icon: 'mdi:web-box',
-    latest: true,
     changes: [
       {
         type: 'Baru',
@@ -165,11 +186,11 @@ export const changelog: ChangelogEntry[] = [
     changes: [
       {
         type: 'Baru',
-        text: 'Bcrypt Encoder & Decoder membuat encoded hash dengan salt acak dan memverifikasi password tanpa mendekripsi hash.',
+        text: 'Bcrypt Hash Generator & Verifier membuat encoded hash dengan salt acak dan memverifikasi password tanpa mendekripsi hash.',
       },
       {
         type: 'Baru',
-        text: 'Argon2id Encoder & Decoder menyediakan pengaturan memory, iterations, parallelism, hash length, dan verifikasi password.',
+        text: 'Argon2id Hash Generator & Verifier menyediakan pengaturan memory, iterations, parallelism, hash length, dan verifikasi password.',
       },
       {
         type: 'Baru',

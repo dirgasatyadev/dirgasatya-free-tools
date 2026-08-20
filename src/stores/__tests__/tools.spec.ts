@@ -11,14 +11,14 @@ describe('tools store', () => {
     expect(store.filteredTools).toHaveLength(tools.length)
   })
 
-  it('menampilkan seluruh tool aktif', () => {
+  it('menampilkan 12 tool pertama sebelum lazy load', () => {
     const store = useToolsStore()
 
     expect(store.visibleTools.map((tool) => tool.name)).toEqual([
       'PNG to AVIF',
       'Green Screen Remover',
-      'Bcrypt Encoder & Decoder',
-      'Argon2id Encoder & Decoder',
+      'Bcrypt Hash Generator & Verifier',
+      'Argon2id Hash Generator & Verifier',
       'SHA-256 Generator',
       'SHA-512 Generator',
       'JWT Generator',
@@ -26,17 +26,18 @@ describe('tools store', () => {
       'Compress Image',
       'SVG Maker',
       'Favicon Generator',
+      'JSON Formatter & Validator',
     ])
-    expect(store.hasMore).toBe(false)
-    expect(store.remainingCount).toBe(0)
+    expect(store.hasMore).toBe(true)
+    expect(store.remainingCount).toBe(9)
   })
 
-  it('tidak menambah data ketika seluruh tool sudah terlihat', () => {
+  it('menambah tool berikutnya melalui lazy load', () => {
     const store = useToolsStore()
 
     store.loadMore()
 
-    expect(store.visibleTools).toHaveLength(tools.length)
+    expect(store.visibleTools).toHaveLength(21)
     expect(store.hasMore).toBe(false)
     expect(store.remainingCount).toBe(0)
   })
@@ -63,7 +64,7 @@ describe('tools store', () => {
 
   it('mengosongkan hasil saat kategori tidak mempunyai tool aktif', () => {
     const store = useToolsStore()
-    store.selectedCategory = 'Text'
+    store.selectedCategory = 'PDF'
 
     expect(store.filteredTools).toEqual([])
   })

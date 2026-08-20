@@ -82,6 +82,16 @@ const router = createRouter({
       name: 'favicon-generator',
       component: () => import('@/pages/FaviconGeneratorPage.vue'),
     },
+    { path: '/tools/json-formatter-validator', name: 'json-formatter-validator', component: () => import('@/pages/JsonFormatterPage.vue') },
+    { path: '/tools/base64-encoder-decoder', name: 'base64-encoder-decoder', component: () => import('@/pages/TextEncoderDecoderPage.vue'), props: { type: 'base64' } },
+    { path: '/tools/url-encoder-decoder', name: 'url-encoder-decoder', component: () => import('@/pages/TextEncoderDecoderPage.vue'), props: { type: 'url' } },
+    { path: '/tools/uuid-generator', name: 'uuid-generator', component: () => import('@/pages/UuidGeneratorPage.vue') },
+    { path: '/tools/jwt-decoder-verifier', name: 'jwt-decoder-verifier', component: () => import('@/pages/JwtDecoderPage.vue') },
+    { path: '/tools/regex-tester', name: 'regex-tester', component: () => import('@/pages/RegexTesterPage.vue') },
+    { path: '/tools/unix-timestamp-converter', name: 'unix-timestamp-converter', component: () => import('@/pages/UnixTimestampPage.vue') },
+    { path: '/tools/word-counter', name: 'word-counter', component: () => import('@/pages/WordCounterPage.vue') },
+    { path: '/tools/json-csv-converter', name: 'json-csv-converter', component: () => import('@/pages/JsonCsvConverterPage.vue') },
+    { path: '/tools/meta-tag-generator', name: 'meta-tag-generator', component: () => import('@/pages/MetaTagGeneratorPage.vue') },
   ],
 })
 

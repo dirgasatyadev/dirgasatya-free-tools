@@ -7,6 +7,7 @@ export type ChangelogScope =
   | 'Compress Image'
   | 'SVG Maker'
   | 'Favicon Generator'
+  | 'Developer, Text & Data Tools'
   | 'Security & Developer'
 
 export interface ChangeItem {
