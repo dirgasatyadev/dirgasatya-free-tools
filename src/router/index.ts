@@ -35,4 +35,27 @@ const router = createRouter({
   ],
 })
 
+const lazyImportErrorPattern =
+  /Failed to fetch dynamically imported module|Importing a module script failed|Outdated Optimize Dep/i
+
+router.onError((error, to) => {
+  if (!lazyImportErrorPattern.test(error.message)) {
+    console.error('[Router]', error)
+    return
+  }
+
+  const reloadKey = `router:lazy-reload:${to.fullPath}`
+  if (sessionStorage.getItem(reloadKey)) {
+    console.error('[Router] Lazy route tetap gagal setelah reload.', error)
+    return
+  }
+
+  sessionStorage.setItem(reloadKey, '1')
+  window.location.assign(to.fullPath)
+})
+
+router.afterEach((to, _from, failure) => {
+  if (!failure) sessionStorage.removeItem(`router:lazy-reload:${to.fullPath}`)
+})
+
 export default router
