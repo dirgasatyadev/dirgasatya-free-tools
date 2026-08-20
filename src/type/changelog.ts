@@ -9,6 +9,7 @@ export type ChangelogScope =
   | 'Favicon Generator'
   | 'Developer, Text & Data Tools'
   | 'Security & Developer'
+  | 'Calculator, Cron & Checksum Tools'
 
 export interface ChangeItem {
   type: ChangeType

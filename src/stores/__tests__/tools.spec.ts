@@ -29,13 +29,16 @@ describe('tools store', () => {
       'JSON Formatter & Validator',
     ])
     expect(store.hasMore).toBe(true)
-    expect(store.remainingCount).toBe(tools.length - 12)
+    expect(store.remainingCount).toBe(Math.min(store.pageSize, tools.length - store.pageSize))
   })
 
-  it('menambah tool berikutnya melalui lazy load', () => {
+  it('menambah setiap halaman tool melalui lazy load', () => {
     const store = useToolsStore()
 
     store.loadMore()
+    expect(store.visibleTools).toHaveLength(Math.min(tools.length, store.pageSize * 2))
+
+    while (store.hasMore) store.loadMore()
 
     expect(store.visibleTools).toHaveLength(tools.length)
     expect(store.hasMore).toBe(false)

@@ -2,6 +2,30 @@ import type { ChangelogEntry } from '@/type/changelog'
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.11.0',
+    date: '20 Agustus 2026',
+    title: 'Calculator, Cron & Checksum Tools',
+    description:
+      'Sepuluh tool dan peningkatan baru untuk perhitungan web, ukuran file, jaringan, penjadwalan cron, dan verifikasi checksum.',
+    scope: 'Calculator, Cron & Checksum Tools',
+    icon: 'mdi:calculator-variant-outline',
+    latest: true,
+    changes: [
+      { type: 'Baru', text: 'PX ↔ REM Converter mengonversi unit CSS dua arah dengan root font size yang dapat disesuaikan.' },
+      { type: 'Baru', text: 'Aspect Ratio Calculator menghitung rasio sederhana dan ukuran target yang tetap proporsional.' },
+      { type: 'Baru', text: 'CSS clamp() Calculator menghasilkan formula fluid typography siap salin dari batas ukuran dan viewport.' },
+      { type: 'Baru', text: 'Percentage Calculator menyediakan perhitungan persentase dari nilai, rasio, serta kenaikan atau penurunan.' },
+      { type: 'Baru', text: 'Screen Resolution / Ratio Calculator menghitung aspect ratio, orientasi, jumlah pixel, megapixel, dan PPI.' },
+      { type: 'Baru', text: 'File Size Converter mendukung bit hingga TB dengan pilihan sistem binary atau decimal.' },
+      { type: 'Baru', text: 'Bandwidth / Download Time Calculator memperkirakan durasi transfer berdasarkan ukuran file, bandwidth, dan overhead jaringan.' },
+      { type: 'Baru', text: 'Cron Expression Builder menyediakan preset dan mode visual untuk nilai tertentu, interval, serta rentang pada lima field cron.' },
+      { type: 'Baru', text: 'SHA-384 Generator dan MD5 Generator ditambahkan untuk pemeriksaan integritas data.' },
+      { type: 'Peningkatan', text: 'SHA-256, SHA-384, SHA-512, dan MD5 mendukung input teks atau file, drag-and-drop, progress, download checksum, dan expected checksum.' },
+      { type: 'Peningkatan', text: 'Katalog dan pengujian lazy-load disesuaikan agar mendukung lebih dari dua halaman tool.' },
+      { type: 'Keamanan', text: 'Perhitungan, file, dan checksum tetap diproses secara lokal tanpa dikirim ke server.' },
+    ],
+  },
+  {
     version: 'v0.10.0',
     date: '20 Agustus 2026',
     title: 'Developer, Text & Data Tools',
@@ -9,7 +33,6 @@ export const changelog: ChangelogEntry[] = [
       'Sepuluh tool browser-only baru untuk JSON, encoding, identifier, JWT, regex, waktu, teks, data, dan SEO.',
     scope: 'Developer, Text & Data Tools',
     icon: 'mdi:code-braces-box',
-    latest: true,
     changes: [
       { type: 'Baru', text: 'JSON Formatter & Validator menyediakan format, minify, pilihan indent, dan pesan validasi.' },
       { type: 'Baru', text: 'Base64 Encoder & Decoder mendukung teks UTF-8, sedangkan URL Encoder & Decoder mendukung komponen dan URL lengkap.' },

@@ -23,6 +23,8 @@ const scopeClasses: Record<ChangelogScope, string> = {
   'Developer, Text & Data Tools': 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300',
   'Security & Developer':
     'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
+  'Calculator, Cron & Checksum Tools':
+    'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
 }
 </script>
 
