@@ -1,5 +1,6 @@
 export type ChangeType = 'Baru' | 'Peningkatan' | 'Infrastruktur' | 'Keamanan'
 export type ChangelogScope =
+  | 'Release & Platform'
   | 'Platform'
   | 'PNG to AVIF'
   | 'Green Screen Remover'

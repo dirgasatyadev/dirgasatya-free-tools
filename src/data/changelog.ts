@@ -2,13 +2,30 @@ import type { ChangelogEntry } from '@/types/changelog'
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v1.0.0',
+    date: '20 Agustus 2026',
+    title: 'Rilis Stabil Dearga Free Tools',
+    description: 'Rilis production-ready pertama dengan workflow tool lokal yang tersambung, pemrosesan data defensif, dan quality gate yang dapat direproduksi.',
+    scope: 'Release & Platform',
+    icon: 'mdi:rocket-launch-outline',
+    latest: true,
+    changes: [
+      { type: 'Peningkatan', text: 'Workflow transfer file gambar kini bekerja dua arah antara converter, resizer, compressor, favicon, dan tool gambar lain tanpa download-upload ulang.' },
+      { type: 'Keamanan', text: 'SQL minifier menjaga literal PostgreSQL dollar-quoted dan SVG sanitizer menolak referensi URL eksternal pada seluruh atribut.' },
+      { type: 'Peningkatan', text: 'JSON Explorer memakai flatten iterative, lookup path O(1), pencarian debounce, dan virtual tree; JSONPath serta generator TypeScript berjalan di worker dengan timeout.' },
+      { type: 'Peningkatan', text: 'Route formatter bahasa memiliki landing page SEO yang berbeda, sementara route generic menjadi hub seluruh formatter.' },
+      { type: 'Peningkatan', text: 'Image Resizer mendukung exact canvas, fit within per file, dan percentage agar batch dengan aspect ratio campuran menghasilkan output yang terprediksi.' },
+      { type: 'Infrastruktur', text: 'SVG Optimizer berjalan di worker; CI mengumpulkan coverage, menjalankan E2E Chromium dan WebKit, serta menerapkan hard bundle regression gate.' },
+      { type: 'Infrastruktur', text: 'GitHub Actions, Dependabot, icon build gate, static SEO, canonical, sitemap, robots, dan halaman 404 production telah dipersiapkan untuk rilis stabil.' },
+    ],
+  },
+  {
     version: 'v0.16.0',
     date: '20 Agustus 2026',
     title: 'JSON Workbench & TypeScript Inference',
     description: 'JSONPath filter yang langsung dapat dieksplorasi dan generator TypeScript dengan schema inference yang lebih matang.',
     scope: 'JSON Developer Tools',
     icon: 'mdi:language-typescript',
-    latest: true,
     changes: [
       { type: 'Peningkatan', text: 'JSON Explorer memakai contoh tree user yang jelas dan query filter $.users[?(@.active)].email dengan result JSON gabungan.' },
       { type: 'Peningkatan', text: 'JSONPath tetap berjalan dalam evaluation mode safe serta menampilkan value, path, salin, dan download hasil.' },
