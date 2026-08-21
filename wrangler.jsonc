@@ -1,7 +1,13 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "dearga-free-tools",
+  "name": "dirgasatya-free-tools",
   "compatibility_date": "2026-08-19",
+  "routes": [
+    {
+      "pattern": "tools.dirgasatya.id",
+      "custom_domain": true
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "html_handling": "drop-trailing-slash",

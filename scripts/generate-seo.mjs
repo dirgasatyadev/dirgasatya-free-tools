@@ -58,7 +58,7 @@ const routes = [
   ...tools.map((tool) => ({ ...tool, title: seoTitle(tool.name), applicationName: tool.name })),
   ...aliases,
 ]
-const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://tools.dirgasatya.com').replace(/\/$/, '')
+const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://tools.dirgasatya.id').replace(/\/$/, '')
 const template = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8')
 const escapeHtml = (value) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 
