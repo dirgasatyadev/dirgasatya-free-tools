@@ -60,3 +60,7 @@ Perbarui type declarations setelah mengubah konfigurasi Wrangler:
 ```sh
 npm run cf-typegen
 ```
+
+## Lisensi
+
+Project ini tersedia di bawah [MIT License](LICENSE).
