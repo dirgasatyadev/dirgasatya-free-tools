@@ -1,19 +1,29 @@
 import { appendFile, readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { gzipSync } from 'node:zlib'
+import { evaluateBundleBudget } from './bundle-budget-policy.mjs'
 
 const projectRoot = process.cwd()
 const outputDirectory = path.join(projectRoot, 'dist')
 const manifestPath = path.join(outputDirectory, '.vite', 'manifest.json')
+const baselinePath = path.join(projectRoot, 'bundle-budget-baseline.json')
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+const baseline = JSON.parse(await readFile(baselinePath, 'utf8'))
 const records = Object.entries(manifest)
 const byFile = new Map(records.map(([key, value]) => [value.file, { key, ...value }]))
 const fileSizeCache = new Map()
 
-const informationalBudgets = {
+const absoluteBudgets = {
   initialGzipBytes: 250 * 1024,
   largestRouteGzipBytes: 600 * 1024,
 }
+
+if (baseline.schemaVersion !== 1
+  || !Number.isFinite(baseline.regressionTolerance)
+  || baseline.regressionTolerance < 0
+  || !Number.isSafeInteger(baseline.metrics?.initialGzipBytes)
+  || !Number.isSafeInteger(baseline.metrics?.largestRouteGzipBytes))
+  throw new Error('bundle-budget-baseline.json tidak valid.')
 
 async function sizeOf(file) {
   if (!fileSizeCache.has(file)) {
@@ -106,36 +116,51 @@ for (const file of outputFiles.filter((file) => file.endsWith('.wasm'))) {
 }
 wasm.sort((left, right) => right.rawBytes - left.rawBytes)
 
+const budgetResults = [
+  evaluateBundleBudget({ name: 'Homepage JS', currentBytes: initial.gzipBytes, absoluteBudgetBytes: absoluteBudgets.initialGzipBytes, baselineBytes: baseline.metrics.initialGzipBytes, regressionTolerance: baseline.regressionTolerance }),
+  evaluateBundleBudget({ name: 'Largest route', currentBytes: pageRoutes[0]?.gzipBytes ?? 0, absoluteBudgetBytes: absoluteBudgets.largestRouteGzipBytes, baselineBytes: baseline.metrics.largestRouteGzipBytes, regressionTolerance: baseline.regressionTolerance }),
+]
+const failures = budgetResults.filter((result) => result.status === 'FAIL')
+
 const report = {
   generatedAt: new Date().toISOString(),
-  note: 'Route gzip adalah biaya incremental di luar static graph initial homepage, termasuk worker JS dan tidak termasuk WASM. Budget masih informasional dan tidak menggagalkan build.',
-  budgets: informationalBudgets,
+  note: 'Route gzip adalah biaya incremental di luar static graph initial homepage, termasuk worker JS dan tidak termasuk WASM. Budget absolut berlaku langsung; metrik legacy di atas budget hanya boleh tumbuh maksimal sesuai toleransi baseline.',
+  budgets: absoluteBudgets,
+  gate: {
+    regressionTolerance: baseline.regressionTolerance,
+    passed: failures.length === 0,
+    results: budgetResults,
+  },
   initial,
   routes,
   largestRoute: pageRoutes[0] ?? null,
   wasm,
 }
 const kib = (bytes) => `${(bytes / 1024).toFixed(1)} KiB`
-const status = (bytes, budget) => bytes <= budget ? 'OK' : 'WARN'
+const initialBudget = budgetResults[0]
+const largestRouteBudget = budgetResults[1]
 const rows = [
-  ['Homepage JS', initial.rawBytes, initial.gzipBytes, informationalBudgets.initialGzipBytes, status(initial.gzipBytes, informationalBudgets.initialGzipBytes)],
-  ...routes.map((route) => [route.name, route.rawBytes, route.gzipBytes, null, 'INFO']),
+  ['Homepage JS', initial.rawBytes, initial.gzipBytes, initialBudget.absoluteBudgetBytes, initialBudget.gateBytes, initialBudget.status],
+  ...routes.map((route) => [route.name, route.rawBytes, route.gzipBytes, null, null, 'INFO']),
 ]
 if (report.largestRoute) rows.push([
   `Largest route (${report.largestRoute.source.replace('src/pages/', '')})`,
   report.largestRoute.rawBytes,
   report.largestRoute.gzipBytes,
-  informationalBudgets.largestRouteGzipBytes,
-  status(report.largestRoute.gzipBytes, informationalBudgets.largestRouteGzipBytes),
+  largestRouteBudget.absoluteBudgetBytes,
+  largestRouteBudget.gateBytes,
+  largestRouteBudget.status,
 ])
-for (const asset of wasm) rows.push([asset.file, asset.rawBytes, asset.gzipBytes, null, 'TRACKED'])
+for (const asset of wasm) rows.push([asset.file, asset.rawBytes, asset.gzipBytes, null, null, 'TRACKED'])
 
 const markdown = [
   '## Bundle size report',
   '',
-  '| Bundle | Raw | Gzip | Informational budget | Status |',
-  '| --- | ---: | ---: | ---: | --- |',
-  ...rows.map(([name, raw, gzip, budget, rowStatus]) => `| ${name} | ${kib(raw)} | ${kib(gzip)} | ${budget ? kib(budget) : '—'} | ${rowStatus} |`),
+  '| Bundle | Raw | Gzip | Target | Gate | Status |',
+  '| --- | ---: | ---: | ---: | ---: | --- |',
+  ...rows.map(([name, raw, gzip, budget, gate, rowStatus]) => `| ${name} | ${kib(raw)} | ${kib(gzip)} | ${budget ? kib(budget) : '—'} | ${gate ? kib(gate) : '—'} | ${rowStatus} |`),
+  '',
+  `Toleransi regresi baseline: ${(baseline.regressionTolerance * 100).toFixed(0)}%. Status BASELINE berarti ukuran masih di atas target absolut, tetapi belum melewati gate regresi.`,
   '',
   report.note,
   '',
@@ -145,3 +170,8 @@ await writeFile(path.join(projectRoot, 'bundle-report.json'), `${JSON.stringify(
 await writeFile(path.join(projectRoot, 'bundle-report.md'), markdown)
 if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, markdown)
 process.stdout.write(`\n${markdown}`)
+if (failures.length > 0) {
+  for (const failure of failures)
+    process.stderr.write(`Bundle budget gagal: ${failure.name} ${kib(failure.currentBytes)} > gate ${kib(failure.gateBytes)}.\n`)
+  process.exitCode = 1
+}

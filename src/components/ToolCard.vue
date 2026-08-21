@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import type { FreeTool, ToolViewMode } from '@/type/tool'
+import type { FreeTool, ToolViewMode } from '@/types/tool'
 
 withDefaults(
   defineProps<{

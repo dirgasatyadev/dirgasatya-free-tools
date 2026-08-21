@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { Icon } from '@iconify/vue'
-import type { ToolFilterCategory } from '@/type/tool'
+import type { ToolFilterCategory } from '@/types/tool'
 
 interface CategoryOption {
   value: ToolFilterCategory

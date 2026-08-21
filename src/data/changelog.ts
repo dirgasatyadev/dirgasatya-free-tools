@@ -1,4 +1,4 @@
-import type { ChangelogEntry } from '@/type/changelog'
+import type { ChangelogEntry } from '@/types/changelog'
 
 export const changelog: ChangelogEntry[] = [
   {

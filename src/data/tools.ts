@@ -1,4 +1,4 @@
-import type { FreeTool, RegisteredTool, ToolCategory } from '@/type/tool'
+import type { FreeTool, RegisteredTool, ToolCategory } from '@/types/tool'
 
 export const toolRegistry: RegisteredTool[] = [
   {

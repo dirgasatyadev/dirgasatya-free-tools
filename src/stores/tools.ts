@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { tools } from '@/data/tools'
-import type { ToolFilterCategory } from '@/type/tool'
+import type { ToolFilterCategory } from '@/types/tool'
 
 export const useToolsStore = defineStore('tools', () => {
   const pageSize = 12

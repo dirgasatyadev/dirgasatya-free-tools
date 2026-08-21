@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { getCompatibleTransferTargets } from '@/composables/useToolTransfer'
 import { useToolTransferStore } from '@/stores/toolTransfer'
-import type { TransferableToolFile } from '@/type/toolTransfer'
+import type { TransferableToolFile } from '@/types/toolTransfer'
 
 const props = defineProps<{
   sourceToolKey: string

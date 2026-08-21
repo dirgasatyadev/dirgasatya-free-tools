@@ -9,6 +9,17 @@ export default mergeConfig(
       environment: 'jsdom',
       exclude: [...configDefaults.exclude, 'e2e/**'],
       root: fileURLToPath(new URL('./', import.meta.url)),
+      coverage: {
+        provider: 'v8',
+        reportsDirectory: 'coverage',
+        reporter: ['text', 'json-summary', 'html', 'lcov'],
+        include: ['src/**/*.{ts,vue}'],
+        exclude: [
+          'src/**/*.d.ts',
+          'src/**/__tests__/**',
+          'src/icons/mdiSubset.ts',
+        ],
+      },
     },
   }),
 )

@@ -2,7 +2,7 @@
 import { Icon } from '@iconify/vue'
 import SiteHeader from '@/components/SiteHeader.vue'
 import { changelog } from '@/data/changelog'
-import type { ChangeType, ChangelogScope } from '@/type/changelog'
+import type { ChangeType, ChangelogScope } from '@/types/changelog'
 
 const badgeClasses: Record<ChangeType, string> = {
   Baru: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',

@@ -16,6 +16,7 @@ npm run lint
 npm run lint:check
 npm run type-check
 npm test
+npm run test:coverage
 npm run build
 npm run test:e2e:install
 npm run test:e2e
@@ -23,13 +24,15 @@ npm run test:e2e
 
 `lint` memperbaiki source lokal, sedangkan `lint:check` hanya memverifikasi dan digunakan oleh CI. Saat build production, set `SITE_URL` atau `VITE_SITE_URL` ke origin deployment agar canonical URL, sitemap, dan robots.txt menggunakan domain yang benar.
 
+`npm run test:coverage` menghasilkan laporan text, JSON summary, HTML, dan LCOV di folder `coverage/`. CI mengunggah folder tersebut sebagai artifact. Coverage masih bersifat baseline reporting dan belum memakai threshold minimum.
+
 `npm run build` menjalankan type-check dan production build. Production build selalu menjalankan `icons:check` sebelum Vite, sehingga subset Iconify yang tertinggal akan menghentikan build maupun deploy. Setelah menambahkan icon MDI baru, perbarui subset dengan:
 
 ```sh
 npm run icons:generate
 ```
 
-Build juga menghasilkan static SEO pages serta laporan ukuran bundle raw/gzip di `bundle-report.json` dan `bundle-report.md`.
+Build juga menghasilkan static SEO pages serta laporan ukuran bundle raw/gzip di `bundle-report.json` dan `bundle-report.md`. Budget homepage 250 KiB gzip berlaku mutlak. Largest route memiliki target 600 KiB gzip; baseline legacy yang masih di atas target tidak boleh bertambah lebih dari 10%. Pelanggaran budget atau gate regresi menghentikan build.
 
 Playwright menjalankan 26 flow penting per browser, atau 52 test pada Chromium dan WebKit. Cakupannya meliputi route/SEO/404, image pipeline dan transfer, worker timeout, formatter, JSON tools, SVG optimizer, ZIP, serta export file. Perintah instalasi browser cukup dijalankan sekali pada mesin development.
 

@@ -6,7 +6,7 @@ import SiteHeader from '@/components/SiteHeader.vue'
 import ToolCard from '@/components/ToolCard.vue'
 import { useTools } from '@/composables/useTools'
 import { toolCategories, tools } from '@/data/tools'
-import type { ToolFilterCategory, ToolViewMode } from '@/type/tool'
+import type { ToolFilterCategory, ToolViewMode } from '@/types/tool'
 
 const {
   query,

@@ -1,6 +1,6 @@
 import { shallowRef } from 'vue'
 import { defineStore } from 'pinia'
-import type { PendingToolTransfer, TransferableToolFile } from '@/type/toolTransfer'
+import type { PendingToolTransfer, TransferableToolFile } from '@/types/toolTransfer'
 
 export const useToolTransferStore = defineStore('tool-transfer', () => {
   const pendingTransfer = shallowRef<PendingToolTransfer | null>(null)

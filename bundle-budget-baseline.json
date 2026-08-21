@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "regressionTolerance": 0.1,
+  "metrics": {
+    "initialGzipBytes": 71649,
+    "largestRouteGzipBytes": 840027
+  }
+}

@@ -1,7 +1,7 @@
 import { onMounted, toValue, type MaybeRefOrGetter } from 'vue'
 import { tools } from '@/data/tools'
 import { useToolTransferStore } from '@/stores/toolTransfer'
-import type { TransferableToolFile } from '@/type/toolTransfer'
+import type { TransferableToolFile } from '@/types/toolTransfer'
 
 export function acceptsTransferMimeType(acceptedMimeTypes: readonly string[], mimeType: string) {
   return acceptedMimeTypes.some((acceptedType) => {
