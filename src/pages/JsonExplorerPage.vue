@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { Icon } from "@iconify/vue";
 import ToolPageShell from "@/components/ToolPageShell.vue";
 import JsonExplorerTree from "@/components/JsonExplorerTree.vue";
 import {
-  evaluateJsonPath,
   flattenJsonTree,
   jsonPreview,
   parseJsonExplorerInput,
@@ -12,6 +11,7 @@ import {
   type JsonExplorerNode,
   type JsonPathMatch,
 } from "@/composables/useJsonExplorer";
+import { runDataProcessingWorker } from "@/composables/useDataProcessingWorker";
 
 const sample = `{
   "user": {
@@ -25,16 +25,28 @@ const sample = `{
   ]
 }`;
 const input = ref(sample);
-const parsed = ref<unknown>(null);
-const nodes = ref<JsonExplorerNode[]>([]);
+const parsed = shallowRef<unknown>(null);
+const nodes = shallowRef<JsonExplorerNode[]>([]);
+const nodesByPath = computed(() => new Map(nodes.value.map((node) => [node.path, node])));
 const expandedPaths = ref(new Set<string>());
+const searchInput = ref("");
 const search = ref("");
 const expression = ref("$.users[?(@.active)].email");
 const results = ref<JsonPathMatch[]>([]);
 const errorMessage = ref("");
 const copied = ref("");
+const isQuerying = ref(false);
+let queryController: AbortController | null = null;
 const matches = computed(() => searchJsonNodes(nodes.value, search.value));
 const matchedPaths = computed(() => new Set(matches.value.map((node) => node.path)));
+
+watch(searchInput, (value, _previous, onCleanup) => {
+  const timer = window.setTimeout(() => {
+    search.value = value;
+    expandMatches();
+  }, 200);
+  onCleanup(() => window.clearTimeout(timer));
+});
 
 function explore() {
   errorMessage.value = "";
@@ -51,15 +63,26 @@ function explore() {
     errorMessage.value = error instanceof Error ? error.message : "JSON tidak dapat dibaca.";
   }
 }
-function runQuery() {
+async function runQuery() {
+  if (isQuerying.value) return;
   errorMessage.value = "";
+  isQuerying.value = true;
+  const controller = new AbortController();
+  queryController = controller;
   try {
     if (!nodes.value.length) explore();
-    if (nodes.value.length) results.value = evaluateJsonPath(parsed.value, expression.value);
+    if (nodes.value.length)
+      results.value = await runDataProcessingWorker(
+        { action: "jsonpath", json: parsed.value, expression: expression.value },
+        controller.signal,
+      );
   } catch (error) {
     results.value = [];
-    errorMessage.value =
-      error instanceof Error ? error.message : "JSONPath tidak dapat dijalankan.";
+    if (!(error instanceof DOMException && error.name === "AbortError"))
+      errorMessage.value = error instanceof Error ? error.message : "JSONPath tidak dapat dijalankan.";
+  } finally {
+    if (queryController === controller) queryController = null;
+    isQuerying.value = false;
   }
 }
 function toggle(path: string) {
@@ -74,7 +97,7 @@ function expandMatches() {
     let parent = match.parentPath;
     while (parent) {
       next.add(parent);
-      parent = nodes.value.find((node) => node.path === parent)?.parentPath ?? null;
+      parent = nodesByPath.value.get(parent)?.parentPath ?? null;
     }
   }
   expandedPaths.value = next;
@@ -105,6 +128,7 @@ function downloadResults() {
   window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 explore();
+onBeforeUnmount(() => queryController?.abort());
 </script>
 
 <template>
@@ -147,17 +171,16 @@ explore();
       <section>
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 class="font-black">Tree explorer · {{ nodes.length }} node</h2>
-          <span v-if="search" class="text-xs font-bold text-amber-600"
+          <span v-if="searchInput" class="text-xs font-bold text-amber-600"
             >{{ matches.length }} cocok</span
           >
         </div>
         <div class="mt-3 flex gap-2">
           <input
-            v-model="search"
+            v-model="searchInput"
             type="search"
             class="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 dark:border-slate-700 dark:bg-slate-950"
             placeholder="Cari key, value, atau path..."
-            @input="expandMatches"
           /><button
             type="button"
             class="rounded-xl border border-slate-200 px-3 font-bold dark:border-slate-700"
@@ -177,7 +200,7 @@ explore();
           </button>
         </div>
         <div
-          class="mt-3 h-[30rem] overflow-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"
+          class="mt-3 h-[30rem] overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"
         >
           <JsonExplorerTree
             :nodes="nodes"
@@ -206,9 +229,10 @@ explore();
         /><button
           type="button"
           class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 font-bold text-white"
+          :disabled="isQuerying"
           @click="runQuery"
         >
-          <Icon icon="mdi:play" class="size-5" />Run JSONPath
+          <Icon :icon="isQuerying ? 'mdi:loading' : 'mdi:play'" class="size-5" :class="{ 'animate-spin': isQuerying }" />{{ isQuerying ? "Menjalankan..." : "Run JSONPath" }}
         </button>
       </div>
       <p class="mt-2 text-xs text-slate-500">

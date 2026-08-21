@@ -1,7 +1,13 @@
-import { optimize } from "svgo/browser";
 import { getAdaptiveImageTransformPixelLimit } from "@/composables/imageSafety";
 import { normalizeImageBaseName } from "@/composables/image/fileNaming";
 import { validateImageDimensions } from "@/composables/image/imageValidation";
+import {
+  hasUnsafeSvgUrl,
+  isAllowedSvgResourceReference,
+  validateSvgInputSize,
+} from "@/composables/svgSecurity";
+
+export { maxSvgInputBytes } from "@/composables/svgSecurity";
 
 export interface SvgOptimizeOptions {
   removeMetadata: boolean;
@@ -16,7 +22,23 @@ export interface SvgDimensions {
   height: number;
   ratio: number;
 }
-export const maxSvgInputBytes = 2 * 1024 * 1024;
+
+export interface SvgOptimizerResult {
+  data: string;
+  dimensions: SvgDimensions;
+}
+
+export interface SvgOptimizerWorkerRequest {
+  id: number;
+  source: string;
+  options?: SvgOptimizeOptions;
+}
+
+export interface SvgOptimizerWorkerResponse {
+  id: number;
+  result?: SvgOptimizerResult;
+  error?: string;
+}
 
 function numericDimension(value: string | null) {
   if (!value || value.endsWith("%")) return 0;
@@ -25,9 +47,7 @@ function numericDimension(value: string | null) {
 }
 
 export function validateAndSanitizeSvg(source: string) {
-  const bytes = new TextEncoder().encode(source).length;
-  if (!source.trim()) throw new Error("Masukkan SVG terlebih dahulu.");
-  if (bytes > maxSvgInputBytes) throw new Error("Input SVG maksimal 2 MB.");
+  validateSvgInputSize(source);
   const document = new DOMParser().parseFromString(source, "image/svg+xml");
   const parserError = document.querySelector("parsererror");
   if (parserError)
@@ -42,7 +62,8 @@ export function validateAndSanitizeSvg(source: string) {
   ))
     element.remove();
   for (const style of Array.from(root.querySelectorAll("style"))) {
-    if (/@import|url\(\s*["']?(?!#|data:image\/)/i.test(style.textContent ?? "")) style.remove();
+    const css = style.textContent ?? "";
+    if (/@import/i.test(css) || hasUnsafeSvgUrl(css)) style.remove();
   }
   for (const element of [root, ...Array.from(root.querySelectorAll("*"))]) {
     for (const attribute of Array.from(element.attributes)) {
@@ -50,16 +71,12 @@ export function validateAndSanitizeSvg(source: string) {
       const value = attribute.value.trim();
       if (name.startsWith("on")) element.removeAttribute(attribute.name);
       else if (
-        (name === "href" || name === "xlink:href") &&
+        (name === "href" || name.endsWith(":href")) &&
         value &&
-        !value.startsWith("#") &&
-        !value.startsWith("data:image/")
+        !isAllowedSvgResourceReference(value)
       )
         element.removeAttribute(attribute.name);
-      else if (
-        (name === "style" || name === "fill" || name === "stroke" || name === "filter") &&
-        /url\(\s*["']?(?!#|data:image\/)/i.test(value)
-      )
+      else if (hasUnsafeSvgUrl(value))
         element.removeAttribute(attribute.name);
     }
   }
@@ -83,28 +100,57 @@ export function getSvgDimensions(source: string): SvgDimensions {
   return { width, height, ratio: width / height };
 }
 
-export function optimizeSvg(source: string, options: SvgOptimizeOptions) {
-  const sanitized = validateAndSanitizeSvg(source);
-  const result = optimize(sanitized, {
-    multipass: true,
-    plugins: [
-      {
-        name: "preset-default" as const,
-        params: {
-          overrides: {
-            removeComments: options.removeComments ? {} : false,
-            removeMetadata: options.removeMetadata ? null : false,
-            collapseGroups: options.removeGroups ? null : false,
-            cleanupAttrs: options.simplifyAttributes ? {} : false,
-            cleanupNumericValues: options.simplifyAttributes ? {} : false,
-            convertColors: options.simplifyAttributes ? {} : false,
-          },
-        },
-      },
-    ],
-    js2svg: { pretty: options.outputStyle === "prettify", indent: 2 },
+let svgWorkerRequestId = 0;
+
+export function runSvgOptimizerWorker(
+  source: string,
+  options?: SvgOptimizeOptions,
+  signal?: AbortSignal,
+  timeoutMs = 12_000,
+) {
+  try { validateSvgInputSize(source); }
+  catch (error) { return Promise.reject(error); }
+  if (signal?.aborted)
+    return Promise.reject(new DOMException("Pemrosesan SVG dibatalkan.", "AbortError"));
+  return new Promise<SvgOptimizerResult>((resolve, reject) => {
+    const worker = new Worker(new URL("../workers/svgOptimizer.worker.ts", import.meta.url), {
+      type: "module",
+    });
+    const id = ++svgWorkerRequestId;
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      worker.terminate();
+    };
+    const abort = () => {
+      cleanup();
+      reject(new DOMException("Pemrosesan SVG dibatalkan.", "AbortError"));
+    };
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(`Optimasi SVG dihentikan setelah ${Math.round(timeoutMs / 1000)} detik untuk mencegah UI freeze.`));
+    }, timeoutMs);
+    worker.onmessage = (event: MessageEvent<SvgOptimizerWorkerResponse>) => {
+      if (event.data.id !== id) return;
+      cleanup();
+      if (event.data.error || !event.data.result)
+        reject(new Error(event.data.error ?? "Worker SVG tidak menghasilkan output."));
+      else resolve(event.data.result);
+    };
+    worker.onerror = () => {
+      cleanup();
+      reject(new Error("SVG optimizer worker tidak dapat dimuat."));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    const workerOptions = options ? {
+      removeMetadata: options.removeMetadata,
+      removeComments: options.removeComments,
+      removeGroups: options.removeGroups,
+      simplifyAttributes: options.simplifyAttributes,
+      outputStyle: options.outputStyle,
+    } : undefined;
+    worker.postMessage({ id, source, options: workerOptions } satisfies SvgOptimizerWorkerRequest);
   });
-  return { data: result.data, dimensions: getSvgDimensions(result.data) };
 }
 
 export function svgSavings(original: string, optimized: string) {

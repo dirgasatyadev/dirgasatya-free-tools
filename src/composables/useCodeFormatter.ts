@@ -1,6 +1,14 @@
 export type CodeLanguage = "html" | "css" | "javascript" | "typescript" | "sql";
 export type CodeFormatAction = "beautify" | "minify";
 export type CodeIndent = "2" | "4" | "tabs";
+export type SqlDialect =
+  | "sql"
+  | "postgresql"
+  | "mysql"
+  | "sqlite"
+  | "mariadb"
+  | "bigquery"
+  | "transactsql";
 
 export interface CodeFormatterRequest {
   id: number;
@@ -8,7 +16,18 @@ export interface CodeFormatterRequest {
   language: CodeLanguage;
   action: CodeFormatAction;
   indent: CodeIndent;
+  sqlDialect: SqlDialect;
 }
+
+export const sqlDialectOptions: { value: SqlDialect; label: string }[] = [
+  { value: "sql", label: "Standard SQL" },
+  { value: "postgresql", label: "PostgreSQL" },
+  { value: "mysql", label: "MySQL" },
+  { value: "sqlite", label: "SQLite" },
+  { value: "mariadb", label: "MariaDB" },
+  { value: "bigquery", label: "BigQuery" },
+  { value: "transactsql", label: "T-SQL" },
+];
 
 export const maxCodeInputBytes = 2 * 1024 * 1024;
 export const codeLanguageOptions: {
@@ -53,70 +72,14 @@ export function codeFileExtension(language: CodeLanguage, action: CodeFormatActi
     : option.extension;
 }
 
-export function minifySql(source: string) {
-  let output = "";
-  let index = 0;
-  let quote = "";
-  let pendingSpace = false;
-  while (index < source.length) {
-    const character = source[index]!;
-    const next = source[index + 1] ?? "";
-    if (quote) {
-      output += character;
-      if (character === quote) {
-        if (next === quote) {
-          output += next;
-          index += 2;
-          continue;
-        }
-        quote = "";
-      } else if (character === "\\" && next) {
-        output += next;
-        index += 2;
-        continue;
-      }
-      index += 1;
-      continue;
-    }
-    if (character === "'" || character === '"' || character === "`") {
-      if (pendingSpace && output && !/[\s(,]/.test(output[output.length - 1]!)) output += " ";
-      pendingSpace = false;
-      quote = character;
-      output += character;
-      index += 1;
-      continue;
-    }
-    if (character === "-" && next === "-") {
-      index += 2;
-      while (index < source.length && source[index] !== "\n") index += 1;
-      pendingSpace = true;
-      continue;
-    }
-    if (character === "/" && next === "*") {
-      const end = source.indexOf("*/", index + 2);
-      if (end < 0) throw new Error("Komentar blok SQL tidak ditutup.");
-      index = end + 2;
-      pendingSpace = true;
-      continue;
-    }
-    if (/\s/.test(character)) {
-      pendingSpace = true;
-      index += 1;
-      continue;
-    }
-    if (
-      pendingSpace &&
-      output &&
-      !/[\s(,]/.test(output[output.length - 1]!) &&
-      !/[),;]/.test(character)
-    )
-      output += " ";
-    pendingSpace = false;
-    output += character;
-    index += 1;
-  }
-  if (quote) throw new Error("String SQL tidak ditutup.");
-  return output.trim();
+export function canMinifySqlDialect(_dialect: SqlDialect) {
+  return false;
+}
+
+export function minifySql(_source: string, dialect: SqlDialect) {
+  throw new Error(
+    `Minify belum tersedia untuk ${sqlDialectOptions.find((option) => option.value === dialect)?.label ?? dialect}. Gunakan Beautify agar literal SQL tetap aman.`,
+  );
 }
 
 export function runCodeFormatterWorker(

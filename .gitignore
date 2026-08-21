@@ -11,6 +11,8 @@ node_modules
 .DS_Store
 dist
 dist-ssr
+bundle-report.json
+bundle-report.md
 .wrangler/
 coverage
 *.local

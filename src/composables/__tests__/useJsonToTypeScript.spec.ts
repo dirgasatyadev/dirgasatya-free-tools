@@ -80,4 +80,12 @@ describe("JSON to TypeScript generator", () => {
     expect(parseJsonForTypeScript('{"ok":true}')).toEqual({ ok: true });
     expect(() => parseJsonForTypeScript("{")).toThrow("JSON tidak valid");
   });
+
+  it("menghasilkan type dari JSON sangat dalam tanpa recursive call stack", () => {
+    let deeplyNested: Record<string, unknown> = { value: true };
+    for (let depth = 0; depth < 2_000; depth += 1) deeplyNested = { child: deeplyNested };
+    const output = generateTypeScriptFromJson(deeplyNested, defaults);
+    expect(output).toContain("export interface Root");
+    expect(output).toContain("value: boolean;");
+  });
 });

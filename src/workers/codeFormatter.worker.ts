@@ -9,11 +9,12 @@ async function beautify(
   source: string,
   language: CodeLanguage,
   indent: CodeFormatterRequest["indent"],
+  sqlDialect: CodeFormatterRequest["sqlDialect"],
 ) {
   if (language === "sql") {
     const { format } = await import("sql-formatter");
     return format(source, {
-      language: "sql",
+      language: sqlDialect,
       tabWidth: indent === "4" ? 4 : 2,
       useTabs: indent === "tabs",
       keywordCase: "upper",
@@ -60,8 +61,8 @@ async function esbuildMinify(source: string, language: "css" | "javascript" | "t
   return result.code.trim();
 }
 
-async function minify(source: string, language: CodeLanguage) {
-  if (language === "sql") return minifySql(source);
+async function minify(source: string, language: CodeLanguage, sqlDialect: CodeFormatterRequest["sqlDialect"]) {
+  if (language === "sql") return minifySql(source, sqlDialect);
   if (language === "html") {
     const { minify: minifyHtml } = await import(
       "html-minifier-terser/dist/htmlminifier.esm.bundle"
@@ -85,8 +86,8 @@ self.onmessage = async (event: MessageEvent<CodeFormatterRequest>) => {
   try {
     const output =
       event.data.action === "beautify"
-        ? await beautify(event.data.source, event.data.language, event.data.indent)
-        : await minify(event.data.source, event.data.language);
+        ? await beautify(event.data.source, event.data.language, event.data.indent, event.data.sqlDialect)
+        : await minify(event.data.source, event.data.language, event.data.sqlDialect);
     self.postMessage({ id: event.data.id, output });
   } catch (error) {
     self.postMessage({

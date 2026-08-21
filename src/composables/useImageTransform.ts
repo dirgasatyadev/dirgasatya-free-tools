@@ -7,7 +7,7 @@ import { useObjectUrlPool } from '@/composables/image/useObjectUrlPool'
 import { createImageTransformWorkerClient, type ImageFitMode, type ImageTransformFormat, type ImageTransformInput } from '@/composables/image/imageTransformWorker'
 
 export type ImageTransformStatus = 'queued' | 'processing' | 'completed' | 'error'
-export type ImageResizeMode = 'dimensions' | 'percentage'
+export type ImageResizeMode = 'exact' | 'fit-within' | 'percentage'
 
 export interface ImageTransformItem {
   id: string
@@ -74,6 +74,13 @@ export function resolveImageTransformDimensions(item: Pick<ImageTransformItem, '
     return { width: Math.max(1, Math.round(item.sourceWidth * percentage / 100)), height: Math.max(1, Math.round(item.sourceHeight * percentage / 100)) }
   }
   if (!Number.isSafeInteger(settings.width) || !Number.isSafeInteger(settings.height) || settings.width < 1 || settings.height < 1) throw new Error('Width dan height harus berupa pixel integer positif.')
+  if (settings.resizeMode === 'fit-within') {
+    const scale = Math.min(1, settings.width / item.sourceWidth, settings.height / item.sourceHeight)
+    return {
+      width: Math.max(1, Math.round(item.sourceWidth * scale)),
+      height: Math.max(1, Math.round(item.sourceHeight * scale)),
+    }
+  }
   return { width: settings.width, height: settings.height }
 }
 
@@ -242,7 +249,8 @@ export function useImageTransform(settings: Ref<ImageTransformSettings>) {
           const dimensionError = validateImageDimensions(dimensions.width, dimensions.height, maxPixels, 'output')
           if (dimensionError) throw new Error(dimensionError)
           const format = settings.value.format
-          const input: ImageTransformInput = { source: item.sourceBlob, width: dimensions.width, height: dimensions.height, fit: settings.value.fit, format, quality: settings.value.quality, maxPixels }
+          const fit = settings.value.resizeMode === 'exact' ? settings.value.fit : 'contain'
+          const input: ImageTransformInput = { source: item.sourceBlob, width: dimensions.width, height: dimensions.height, fit, format, quality: settings.value.quality, maxPixels }
           const sameFormat = item.file.type === `image/${format}` || (format === 'jpeg' && item.file.type === 'image/jpg')
           const canPreserveOriginal = !settings.value.stripMetadata && !item.cropped && !settings.value.resizeEnabled && sameFormat
           const output = canPreserveOriginal ? item.file : workerClient ? await workerClient.transform(input, activeController.signal) : await transformOnMainThread(input, activeController.signal)

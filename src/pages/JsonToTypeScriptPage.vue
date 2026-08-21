@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { Icon } from "@iconify/vue";
 import ToolPageShell from "@/components/ToolPageShell.vue";
 import { formatFileSize } from "@/composables/usePngToAvif";
-import {
-  generateTypeScriptFromJson,
-  parseJsonForTypeScript,
-  type JsonToTypeScriptOptions,
-} from "@/composables/useJsonToTypeScript";
+import { type JsonToTypeScriptOptions } from "@/composables/useJsonToTypeScript";
+import { runDataProcessingWorker } from "@/composables/useDataProcessingWorker";
 
 const sample = `{
   "id": 1,
@@ -24,6 +21,8 @@ const output = ref("");
 const errorMessage = ref("");
 const copied = ref(false);
 const isDragging = ref(false);
+const isGenerating = ref(false);
+let generationController: AbortController | null = null;
 const options = ref<JsonToTypeScriptOptions>({
   rootName: "Root",
   declarationStyle: "interface",
@@ -34,13 +33,26 @@ const options = ref<JsonToTypeScriptOptions>({
 const inputBytes = computed(() => new TextEncoder().encode(input.value).length);
 const outputBytes = computed(() => new TextEncoder().encode(output.value).length);
 
-function generate() {
+async function generate() {
+  generationController?.abort();
   errorMessage.value = "";
+  output.value = "";
+  isGenerating.value = true;
+  const controller = new AbortController();
+  generationController = controller;
   try {
-    output.value = generateTypeScriptFromJson(parseJsonForTypeScript(input.value), options.value);
+    output.value = await runDataProcessingWorker(
+      { action: "json-to-typescript", source: input.value, options: { ...options.value } },
+      controller.signal,
+    );
   } catch (error) {
-    output.value = "";
-    errorMessage.value = error instanceof Error ? error.message : "TypeScript tidak dapat dibuat.";
+    if (!(error instanceof DOMException && error.name === "AbortError"))
+      errorMessage.value = error instanceof Error ? error.message : "TypeScript tidak dapat dibuat.";
+  } finally {
+    if (generationController === controller) {
+      generationController = null;
+      isGenerating.value = false;
+    }
   }
 }
 async function copyOutput() {
@@ -78,7 +90,8 @@ async function handleDrop(event: DragEvent) {
   isDragging.value = false;
   await loadFile(event.dataTransfer?.files[0]);
 }
-generate();
+void generate();
+onBeforeUnmount(() => generationController?.abort());
 </script>
 
 <template>
@@ -218,9 +231,10 @@ generate();
       <button
         type="button"
         class="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 font-bold text-white"
+        :disabled="isGenerating"
         @click="generate"
       >
-        <Icon icon="mdi:code-braces" class="size-5" />Generate TypeScript
+        <Icon :icon="isGenerating ? 'mdi:loading' : 'mdi:code-braces'" class="size-5" :class="{ 'animate-spin': isGenerating }" />{{ isGenerating ? "Generating..." : "Generate TypeScript" }}
       </button>
       <p class="mt-3 text-xs leading-5 text-slate-500">
         Array object dianalisis lintas item. Field yang hilang pada sebagian item tetap ditandai

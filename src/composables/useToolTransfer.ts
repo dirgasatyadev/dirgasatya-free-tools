@@ -1,4 +1,4 @@
-import { onMounted } from 'vue'
+import { onMounted, toValue, type MaybeRefOrGetter } from 'vue'
 import { tools } from '@/data/tools'
 import { useToolTransferStore } from '@/stores/toolTransfer'
 import type { TransferableToolFile } from '@/type/toolTransfer'
@@ -26,13 +26,13 @@ export function getCompatibleTransferTargets(
 }
 
 export function useIncomingToolTransfer(
-  targetToolKey: string,
+  targetToolKey: MaybeRefOrGetter<string>,
   receiveFiles: (files: File[]) => void | Promise<void>,
 ) {
   const transferStore = useToolTransferStore()
 
   onMounted(() => {
-    const files = transferStore.consumeTransfer(targetToolKey)
+    const files = transferStore.consumeTransfer(toValue(targetToolKey))
     if (files.length > 0) void receiveFiles(files)
   })
 }

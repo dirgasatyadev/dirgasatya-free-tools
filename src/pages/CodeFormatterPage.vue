@@ -1,26 +1,32 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { Icon } from "@iconify/vue";
 import ToolPageShell from "@/components/ToolPageShell.vue";
 import { formatFileSize } from "@/composables/usePngToAvif";
 import {
   codeByteSize,
+  canMinifySqlDialect,
   codeFileExtension,
   codeLanguageOptions,
   codeSamples,
   codeSavings,
   runCodeFormatterWorker,
+  sqlDialectOptions,
   type CodeFormatAction,
   type CodeIndent,
   type CodeLanguage,
+  type SqlDialect,
 } from "@/composables/useCodeFormatter";
 import { codeFormatterAliases } from "@/data/toolAliases";
 
-const props = defineProps<{ initialLanguage?: CodeLanguage }>();
+const props = defineProps<{ initialLanguage?: CodeLanguage; hub?: boolean }>();
+const route = useRoute();
 const language = ref<CodeLanguage>(props.initialLanguage ?? "javascript");
 const input = ref(codeSamples[language.value]);
 const output = ref("");
 const indent = ref<CodeIndent>("2");
+const sqlDialect = ref<SqlDialect>("sql");
 const lastAction = ref<CodeFormatAction>("beautify");
 const isProcessing = ref(false);
 const errorMessage = ref("");
@@ -30,6 +36,22 @@ let controller: AbortController | null = null;
 const selectedLanguage = computed(() =>
   codeLanguageOptions.find((option) => option.value === language.value)!,
 );
+const activeAlias = computed(() =>
+  codeFormatterAliases.find((alias) => alias.path === route.path),
+);
+const isHub = computed(() => props.hub === true || route.path === "/tools/code-formatter-minifier");
+const pageTitle = computed(() => activeAlias.value?.title ?? "Code Formatter & Minifier");
+const pageDescription = computed(() =>
+  activeAlias.value?.description ??
+  "Pusat formatter lokal untuk HTML, CSS, JavaScript, TypeScript, dan SQL dengan halaman khusus bagi setiap bahasa.",
+);
+const languageIcons: Record<CodeLanguage, string> = {
+  html: "mdi:language-html5",
+  css: "mdi:language-css3",
+  javascript: "mdi:language-javascript",
+  typescript: "mdi:language-typescript",
+  sql: "mdi:database-edit-outline",
+};
 const metrics = computed(() => codeSavings(input.value, output.value));
 const aliasPath = (value: CodeLanguage) =>
   codeFormatterAliases.find((route) => route.language === value)?.path ??
@@ -41,6 +63,7 @@ const outputLabel = computed(() =>
       ? "Minified JavaScript output"
       : "Minified output",
 );
+const sqlMinifyAvailable = computed(() => canMinifySqlDialect(sqlDialect.value));
 
 watch(
   () => props.initialLanguage,
@@ -49,6 +72,10 @@ watch(
   },
 );
 watch(input, () => {
+  output.value = "";
+  errorMessage.value = "";
+});
+watch(sqlDialect, () => {
   output.value = "";
   errorMessage.value = "";
 });
@@ -74,7 +101,7 @@ async function process(action: CodeFormatAction) {
   controller = activeController;
   try {
     output.value = await runCodeFormatterWorker(
-      { source: input.value, language: language.value, action, indent: indent.value },
+      { source: input.value, language: language.value, action, indent: indent.value, sqlDialect: sqlDialect.value },
       activeController.signal,
     );
   } catch (error) {
@@ -118,11 +145,55 @@ onBeforeUnmount(() => controller?.abort());
 
 <template>
   <ToolPageShell
-    title="Code Formatter & Minifier"
-    description="Beautify dan minify HTML, CSS, JavaScript, TypeScript, atau SQL dengan satu shared engine."
+    :title="pageTitle"
+    :description="pageDescription"
     icon="mdi:code-braces"
     category="Developer"
   >
+    <template v-if="isHub">
+      <section class="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-5 dark:border-indigo-500/25 dark:bg-indigo-500/10">
+        <h2 class="text-xl font-black">Pilih formatter berdasarkan bahasa</h2>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+          Setiap halaman memiliki parser, opsi, contoh input, dan metadata SEO yang sesuai dengan bahasanya. Source code diproses lokal di browser dan tidak diunggah ke server.
+        </p>
+      </section>
+      <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <RouterLink
+          v-for="formatter in codeFormatterAliases"
+          :key="formatter.path"
+          :to="formatter.path"
+          class="group rounded-2xl border border-slate-200 p-5 transition hover:-translate-y-0.5 hover:border-indigo-400 hover:shadow-lg dark:border-slate-700"
+        >
+          <span class="grid size-12 place-items-center rounded-xl bg-slate-950 text-white dark:bg-white dark:text-slate-950">
+            <Icon :icon="languageIcons[formatter.language]" class="size-6" />
+          </span>
+          <h2 class="mt-4 font-black group-hover:text-indigo-600">{{ formatter.title }}</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-500">{{ formatter.description }}</p>
+          <span class="mt-4 inline-flex items-center gap-1 text-sm font-bold text-indigo-600">
+            Buka {{ formatter.language.toUpperCase() }} formatter
+            <Icon icon="mdi:arrow-right" class="size-4" />
+          </span>
+        </RouterLink>
+      </div>
+      <section class="mt-7 grid gap-4 sm:grid-cols-3">
+        <div class="rounded-2xl bg-slate-50 p-5 dark:bg-slate-800">
+          <Icon icon="mdi:shield-lock-outline" class="size-6 text-emerald-600" />
+          <h2 class="mt-3 font-black">Local processing</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-500">Kode diproses langsung oleh browser tanpa request upload.</p>
+        </div>
+        <div class="rounded-2xl bg-slate-50 p-5 dark:bg-slate-800">
+          <Icon icon="mdi:code-json" class="size-6 text-violet-600" />
+          <h2 class="mt-3 font-black">Engine sesuai bahasa</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-500">Prettier, esbuild, HTML minifier, dan SQL formatter digunakan sesuai kebutuhan syntax.</p>
+        </div>
+        <div class="rounded-2xl bg-slate-50 p-5 dark:bg-slate-800">
+          <Icon icon="mdi:file-download-outline" class="size-6 text-sky-600" />
+          <h2 class="mt-3 font-black">Output siap pakai</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-500">Salin hasil, lihat penghematan ukuran, atau download file output.</p>
+        </div>
+      </section>
+    </template>
+    <template v-else>
     <nav class="grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label="Bahasa code">
       <RouterLink
         v-for="option in codeLanguageOptions"
@@ -183,6 +254,12 @@ onBeforeUnmount(() => controller?.abort());
             />{{ option.label }}</label
           >
         </div>
+        <label v-if="language === 'sql'" class="mt-4 block text-sm font-bold">
+          SQL dialect
+          <select v-model="sqlDialect" class="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950" :disabled="isProcessing">
+            <option v-for="option in sqlDialectOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
         <div class="mt-4 grid grid-cols-2 gap-3">
           <button
             type="button"
@@ -200,7 +277,7 @@ onBeforeUnmount(() => controller?.abort());
           ><button
             type="button"
             class="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 font-bold text-white disabled:opacity-50"
-            :disabled="isProcessing"
+            :disabled="isProcessing || (language === 'sql' && !sqlMinifyAvailable)"
             @click="process('minify')"
           >
             <Icon
@@ -223,6 +300,9 @@ onBeforeUnmount(() => controller?.abort());
         <p v-if="language === 'typescript'" class="mt-3 text-xs leading-5 text-slate-500">
           Beautify mempertahankan TypeScript. Minify mentranspilasi type annotation dan menghasilkan
           JavaScript ES2020 yang siap dijalankan.
+        </p>
+        <p v-if="language === 'sql' && !sqlMinifyAvailable" class="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+          Minify belum tersedia untuk dialect ini. Beautify memakai parser dialect-aware; minify dinonaktifkan agar string, komentar, dan body prosedur tidak berubah.
         </p>
       </section>
       <section>
@@ -290,5 +370,6 @@ onBeforeUnmount(() => controller?.abort());
     >
       {{ errorMessage }}
     </p>
+    </template>
   </ToolPageShell>
 </template>

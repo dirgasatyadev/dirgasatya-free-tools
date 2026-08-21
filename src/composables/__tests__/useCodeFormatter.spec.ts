@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { codeByteSize, codeFileExtension, codeSavings, minifySql } from '@/composables/useCodeFormatter'
+import { canMinifySqlDialect, codeByteSize, codeFileExtension, codeSavings, minifySql, sqlDialectOptions } from '@/composables/useCodeFormatter'
 
 describe('code formatter helpers', () => {
   it('menghitung byte dan savings berdasarkan UTF-8', () => {
@@ -13,14 +13,15 @@ describe('code formatter helpers', () => {
     expect(codeFileExtension('typescript', 'minify')).toBe('js')
   })
 
-  it('minify SQL tanpa merusak marker komentar di dalam string', () => {
-    const source = "SELECT 'hello -- world' AS label, id /* internal */ FROM users -- trailing\n WHERE active = true;"
-    const output = minifySql(source)
-    expect(output).toBe("SELECT 'hello -- world' AS label,id FROM users WHERE active = true;")
+  it('menonaktifkan minify pada dialect yang belum memiliki parser minify aman', () => {
+    for (const dialect of sqlDialectOptions) {
+      expect(canMinifySqlDialect(dialect.value)).toBe(false)
+      expect(() => minifySql('SELECT 1;', dialect.value)).toThrow(`Minify belum tersedia untuk ${dialect.label}`)
+    }
   })
 
-  it('menolak komentar blok dan string SQL yang tidak ditutup', () => {
-    expect(() => minifySql('SELECT 1 /*')).toThrow('Komentar blok SQL tidak ditutup')
-    expect(() => minifySql("SELECT 'broken")).toThrow('String SQL tidak ditutup')
+  it('tidak mencoba mengubah PostgreSQL dollar-quoted body', () => {
+    const source = 'CREATE FUNCTION x() RETURNS void AS $body$\nBEGIN\n  -- isi body\n  RAISE NOTICE \'hello   world\';\nEND\n$body$ LANGUAGE plpgsql;'
+    expect(() => minifySql(source, 'postgresql')).toThrow('Minify belum tersedia untuk PostgreSQL')
   })
 })

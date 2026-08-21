@@ -130,29 +130,54 @@ function mergeSchemas(left: Schema, right: Schema): Schema {
 }
 
 function inferSchema(value: unknown, budget: { nodes: number }): Schema {
-  budget.nodes += 1;
-  if (budget.nodes > maxJsonToTypeScriptNodes)
-    throw new Error(
-      `JSON memiliki lebih dari ${maxJsonToTypeScriptNodes.toLocaleString("id-ID")} node.`,
-    );
-  if (value === null) return primitive("null");
-  if (Array.isArray(value)) {
-    if (!value.length) return { kind: "array", element: primitive("unknown") };
-    let element = inferSchema(value[0], budget);
-    for (let index = 1; index < value.length; index += 1)
-      element = mergeSchemas(element, inferSchema(value[index], budget));
-    return { kind: "array", element };
+  let result = primitive("unknown");
+  type InferTask =
+    | { kind: "infer"; value: unknown; assign: (schema: Schema) => void }
+    | { kind: "array"; children: Schema[]; assign: (schema: Schema) => void }
+    | { kind: "object"; entries: [string, unknown][]; children: Schema[]; assign: (schema: Schema) => void };
+  const tasks: InferTask[] = [{ kind: "infer", value, assign: (schema) => { result = schema; } }];
+
+  while (tasks.length > 0) {
+    const task = tasks.pop()!;
+    if (task.kind === "array") {
+      const element = task.children.slice(1).reduce(mergeSchemas, task.children[0] ?? primitive("unknown"));
+      task.assign({ kind: "array", element });
+      continue;
+    }
+    if (task.kind === "object") {
+      const fields = new Map<string, SchemaField>();
+      task.entries.forEach(([key], index) => fields.set(key, { schema: task.children[index]!, occurrences: 1 }));
+      task.assign({ kind: "object", sampleCount: 1, fields });
+      continue;
+    }
+
+    budget.nodes += 1;
+    if (budget.nodes > maxJsonToTypeScriptNodes)
+      throw new Error(`JSON memiliki lebih dari ${maxJsonToTypeScriptNodes.toLocaleString("id-ID")} node.`);
+    const current = task.value;
+    if (current === null) task.assign(primitive("null"));
+    else if (Array.isArray(current)) {
+      if (current.length === 0) task.assign({ kind: "array", element: primitive("unknown") });
+      else {
+        const children: Schema[] = [];
+        children.length = current.length;
+        tasks.push({ kind: "array", children, assign: task.assign });
+        for (let index = current.length - 1; index >= 0; index -= 1)
+          tasks.push({ kind: "infer", value: current[index], assign: (schema) => { children[index] = schema; } });
+      }
+    } else if (typeof current === "object") {
+      const entries = Object.entries(current as Record<string, unknown>);
+      const children: Schema[] = [];
+      children.length = entries.length;
+      tasks.push({ kind: "object", entries, children, assign: task.assign });
+      for (let index = entries.length - 1; index >= 0; index -= 1)
+        tasks.push({ kind: "infer", value: entries[index]![1], assign: (schema) => { children[index] = schema; } });
+    } else if (typeof current === "string") task.assign(primitive("string"));
+    else if (typeof current === "number") task.assign(primitive("number"));
+    else if (typeof current === "boolean") task.assign(primitive("boolean"));
+    else task.assign(primitive("unknown"));
   }
-  if (typeof value === "object") {
-    const fields = new Map<string, SchemaField>();
-    for (const [key, child] of Object.entries(value as Record<string, unknown>))
-      fields.set(key, { schema: inferSchema(child, budget), occurrences: 1 });
-    return { kind: "object", sampleCount: 1, fields };
-  }
-  if (typeof value === "string") return primitive("string");
-  if (typeof value === "number") return primitive("number");
-  if (typeof value === "boolean") return primitive("boolean");
-  return primitive("unknown");
+  return result;
 }
 
 function words(value: string) {
@@ -207,38 +232,74 @@ export function generateTypeScriptFromJson(value: unknown, options: JsonToTypeSc
     return candidate;
   }
 
-  function renderType(current: Schema, hint: string): string {
-    if (current.kind === "primitive")
-      return current.name === "null" && !options.detectNullable ? "unknown" : current.name;
-    if (current.kind === "array") {
-      const element = renderType(current.element, singularize(hint));
-      return /\s\|\s/.test(element) ? `(${element})[]` : `${element}[]`;
+  function renderType(schema: Schema, hint: string): string {
+    let result = "unknown";
+    type RenderTask =
+      | { kind: "render"; schema: Schema; hint: string; assign: (value: string) => void }
+      | { kind: "array"; rendered: string[]; assign: (value: string) => void }
+      | { kind: "union"; rendered: string[]; assign: (value: string) => void }
+      | { kind: "object"; declaration: { name: string; body: string }; entries: [string, SchemaField][]; rendered: string[]; sampleCount: number };
+    const tasks: RenderTask[] = [{ kind: "render", schema, hint, assign: (value) => { result = value; } }];
+
+    while (tasks.length > 0) {
+      const task = tasks.pop()!;
+      if (task.kind === "array") {
+        const element = task.rendered[0] ?? "unknown";
+        task.assign(/\s\|\s/.test(element) ? `(${element})[]` : `${element}[]`);
+        continue;
+      }
+      if (task.kind === "union") {
+        const rendered = Array.from(new Set(task.rendered));
+        task.assign(rendered.length ? rendered.join(" | ") : "unknown");
+        continue;
+      }
+      if (task.kind === "object") {
+        const properties = task.entries.map(([key, field], index) => {
+          const optional = options.optionalProperties || field.occurrences < task.sampleCount;
+          const readonly = options.readonlyProperties ? "readonly " : "";
+          return `  ${readonly}${propertyName(key)}${optional ? "?" : ""}: ${task.rendered[index]};`;
+        });
+        task.declaration.body = options.declarationStyle === "interface"
+          ? `export interface ${task.declaration.name} {\n${properties.join("\n")}\n}`
+          : `export type ${task.declaration.name} = {\n${properties.join("\n")}\n}`;
+        continue;
+      }
+
+      const current = task.schema;
+      if (current.kind === "primitive") {
+        task.assign(current.name === "null" && !options.detectNullable ? "unknown" : current.name);
+      } else if (current.kind === "array") {
+        const rendered: string[] = [];
+        tasks.push({ kind: "array", rendered, assign: task.assign });
+        tasks.push({ kind: "render", schema: current.element, hint: singularize(task.hint), assign: (value) => { rendered[0] = value; } });
+      } else if (current.kind === "union") {
+        let variants = current.variants;
+        if (!options.detectNullable && variants.length > 1)
+          variants = variants.filter((variant) => !(variant.kind === "primitive" && variant.name === "null"));
+        const rendered: string[] = [];
+        rendered.length = variants.length;
+        tasks.push({ kind: "union", rendered, assign: task.assign });
+        for (let index = variants.length - 1; index >= 0; index -= 1)
+          tasks.push({ kind: "render", schema: variants[index]!, hint: task.hint, assign: (value) => { rendered[index] = value; } });
+      } else {
+        const existing = schemaNames.get(current);
+        if (existing) task.assign(existing);
+        else {
+          const name = uniqueName(task.hint);
+          schemaNames.set(current, name);
+          const declaration = { name, body: "" };
+          declarations.push(declaration);
+          task.assign(name);
+          const entries = Array.from(current.fields.entries());
+          const rendered: string[] = [];
+          rendered.length = entries.length;
+          tasks.push({ kind: "object", declaration, entries, rendered, sampleCount: current.sampleCount });
+          for (let index = entries.length - 1; index >= 0; index -= 1)
+            tasks.push({ kind: "render", schema: entries[index]![1].schema, hint: entries[index]![0], assign: (value) => { rendered[index] = value; } });
+        }
+      }
     }
-    if (current.kind === "union") {
-      let variants = current.variants;
-      if (!options.detectNullable && variants.length > 1)
-        variants = variants.filter(
-          (variant) => !(variant.kind === "primitive" && variant.name === "null"),
-        );
-      const rendered = Array.from(new Set(variants.map((variant) => renderType(variant, hint))));
-      return rendered.length ? rendered.join(" | ") : "unknown";
-    }
-    const existing = schemaNames.get(current);
-    if (existing) return existing;
-    const name = uniqueName(hint);
-    schemaNames.set(current, name);
-    const declaration = { name, body: "" };
-    declarations.push(declaration);
-    const properties = Array.from(current.fields.entries()).map(([key, field]) => {
-      const optional = options.optionalProperties || field.occurrences < current.sampleCount;
-      const readonly = options.readonlyProperties ? "readonly " : "";
-      return `  ${readonly}${propertyName(key)}${optional ? "?" : ""}: ${renderType(field.schema, key)};`;
-    });
-    declaration.body =
-      options.declarationStyle === "interface"
-        ? `export interface ${name} {\n${properties.join("\n")}\n}`
-        : `export type ${name} = {\n${properties.join("\n")}\n}`;
-    return name;
+    return result;
   }
 
   const rootName = normalizeTypeName(options.rootName);

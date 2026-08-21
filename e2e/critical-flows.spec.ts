@@ -51,6 +51,13 @@ test('PNG ke WebP menghasilkan file lewat worker atau fallback', async ({ page }
   await expect(page.getByText('Download WebP', { exact: false })).toBeVisible()
 })
 
+test('hasil PNG ke WebP diterima otomatis oleh Universal Image Converter', async ({ page }) => {
+  await uploadPng(page, '/tools/png-to-webp', 'Semua file selesai dikonversi')
+  await page.getByRole('button', { name: 'Buka di Universal Image Converter' }).click()
+  await expect(page.getByRole('heading', { name: 'Universal Image Converter' })).toBeVisible()
+  await expect(page.getByText('smoke-1.webp', { exact: true })).toBeVisible({ timeout: 90_000 })
+})
+
 test('Green Screen menghasilkan PNG transparan', async ({ page }) => {
   await uploadPng(page, '/tools/green-screen-remover', 'Semua background hijau selesai dihapus')
   await expect(page.getByText('Download PNG', { exact: false })).toBeVisible()
@@ -99,12 +106,14 @@ test('Bcrypt worker membuat hash dan menolak cost eksternal di luar budget', asy
 
 test('Image Resizer memproses batch lewat shared worker', async ({ page }) => {
   await uploadPng(page, '/tools/image-resizer-cropper', '', 2, 128, 96)
+  await expect(page.getByText('Fit within', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Crop', exact: true }).first().click()
   await expect(page.getByRole('heading', { name: 'Crop image' })).toBeVisible()
   await page.getByRole('button', { name: 'Terapkan crop' }).click()
   await expect(page.getByText(/Crop \d+×\d+/)).toBeVisible()
   await page.getByRole('button', { name: 'Resize semua gambar' }).click()
-  await expect(page.getByText('Output 1920×1080', { exact: false })).toHaveCount(2, { timeout: 90_000 })
+  await expect(page.locator('p').filter({ hasText: /^Output \d+×\d+/ })).toHaveCount(2, { timeout: 90_000 })
+  await expect(page.getByText('Output 128×96', { exact: false })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Download semua sebagai ZIP' })).toBeVisible()
 })
 
@@ -118,6 +127,42 @@ test('Universal Image Converter menghasilkan JPEG dari PNG', async ({ page }) =>
   await expect(page.getByRole('button', { name: 'Download', exact: true })).toBeVisible()
 })
 
+test('Image Resizer menghitung Fit within untuk setiap aspect ratio', async ({ page }) => {
+  await page.goto('/tools/image-resizer-cropper')
+  const images = await page.evaluate(() => [
+    { name: 'landscape.png', width: 400, height: 300 },
+    { name: 'portrait.png', width: 300, height: 400 },
+    { name: 'square.png', width: 200, height: 200 },
+  ].map(({ name, width, height }) => {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    canvas.getContext('2d')!.fillRect(0, 0, width, height)
+    return { name, mimeType: 'image/png', base64: canvas.toDataURL('image/png').split(',')[1]! }
+  }))
+  await page.locator('input[type="file"]').first().setInputFiles(images.map((image) => ({
+    name: image.name,
+    mimeType: image.mimeType,
+    buffer: Buffer.from(image.base64, 'base64'),
+  })))
+  await page.getByLabel('Max width').fill('200')
+  await page.getByLabel('Max height').fill('150')
+  await page.getByRole('button', { name: 'Resize semua gambar' }).click()
+  await expect(page.getByText('Output 200×150', { exact: false })).toBeVisible({ timeout: 90_000 })
+  await expect(page.getByText('Output 113×150', { exact: false })).toBeVisible()
+  await expect(page.getByText('Output 150×150', { exact: false })).toBeVisible()
+})
+
+test('hasil Universal Image Converter dapat diteruskan ke Compress Image', async ({ page }) => {
+  await uploadPng(page, '/tools/universal-image-converter', '')
+  await page.getByRole('button', { name: 'Konversi semua gambar' }).click()
+  await expect(page.getByText('Output 4×4', { exact: false })).toBeVisible({ timeout: 90_000 })
+  await page.getByRole('button', { name: 'Buka di Compress Image' }).click()
+  await expect(page.getByRole('heading', { name: 'Compress Image' })).toBeVisible()
+  await expect(page.getByRole('img', { name: 'smoke-1.webp' }).first()).toBeVisible({ timeout: 90_000 })
+  await expect(page.getByText('Semua file selesai dikompres', { exact: false })).toBeVisible({ timeout: 90_000 })
+})
+
 test('JSON Explorer menjalankan JSONPath dan menampilkan tree', async ({ page }) => {
   await page.goto('/tools/json-explorer-jsonpath')
   await expect(page.getByText('Tree explorer', { exact: false })).toBeVisible()
@@ -126,6 +171,22 @@ test('JSON Explorer menjalankan JSONPath dan menampilkan tree', async ({ page })
   await expect(page.getByTestId('jsonpath-result-json')).toContainText('a@example.com')
   await expect(page.getByTestId('jsonpath-result-json')).toContainText('b@example.com')
   await expect(page.getByTestId('jsonpath-result-json')).not.toContainText('c@example.com')
+})
+
+test('JSON Explorer membatasi DOM tree dan mencari node besar secara debounce', async ({ page }) => {
+  await page.goto('/tools/json-explorer-jsonpath')
+  const largeJson = JSON.stringify(Object.fromEntries(Array.from({ length: 2_000 }, (_, index) => [`item-${index}`, index])))
+  await page.locator('textarea').first().fill(largeJson)
+  await page.getByRole('button', { name: 'Explore JSON' }).click()
+  await page.getByRole('button', { name: 'Expand', exact: true }).click()
+  expect(await page.getByRole('treeitem').count()).toBeLessThanOrEqual(30)
+  await page.getByPlaceholder('Cari key, value, atau path...').fill('item-1999')
+  await expect(page.getByText('1 cocok', { exact: true })).toBeVisible()
+  await expect(page.getByRole('treeitem').filter({ hasText: 'item-1999' })).toBeVisible()
+  expect(await page.getByRole('treeitem').count()).toBeLessThanOrEqual(30)
+  await page.getByPlaceholder('$.users[?(@.active)].email').fill('$[*]')
+  await page.getByRole('button', { name: 'Run JSONPath' }).click()
+  await expect(page.getByRole('alert')).toContainText('Hasil melebihi 1.000 item')
 })
 
 test('JSON ke TypeScript menginfer nested interface dan opsi output', async ({ page }) => {
@@ -175,3 +236,29 @@ test('Code Formatter memakai shared engine dan route SEO bahasa', async ({ page 
   await page.getByRole('button', { name: 'Beautify' }).click()
   await expect(page.locator('textarea[readonly]')).toHaveValue(/SELECT/, { timeout: 30_000 })
 })
+
+test('route generic Code Formatter menjadi hub yang berbeda dari landing page bahasa', async ({ page }) => {
+  await page.goto('/tools/code-formatter-minifier')
+  await expect(page).toHaveTitle('Code Formatter & Minifier - Dearga Free Tools')
+  await expect(page.getByRole('heading', { level: 1, name: 'Code Formatter & Minifier' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pilih formatter berdasarkan bahasa' })).toBeVisible()
+  await expect(page.locator('textarea')).toHaveCount(0)
+  for (const formatter of ['HTML', 'CSS', 'JavaScript', 'TypeScript', 'SQL'])
+    await expect(page.getByRole('link', { name: new RegExp(`${formatter} Formatter`, 'i') })).toBeVisible()
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/tools\/code-formatter-minifier$/)
+})
+
+for (const formatterRoute of [
+  { path: '/tools/html-formatter', heading: 'HTML Formatter & Minifier' },
+  { path: '/tools/css-formatter', heading: 'CSS Formatter & Minifier' },
+  { path: '/tools/javascript-formatter', heading: 'JavaScript Formatter & Minifier' },
+  { path: '/tools/typescript-formatter', heading: 'TypeScript Formatter & Minifier' },
+  { path: '/tools/sql-formatter', heading: 'SQL Formatter' },
+]) {
+  test(`SEO alias ${formatterRoute.path} konsisten`, async ({ page }) => {
+    await page.goto(formatterRoute.path)
+    await expect(page).toHaveTitle(`${formatterRoute.heading} - Dearga Free Tools`)
+    await expect(page.getByRole('heading', { level: 1, name: formatterRoute.heading })).toBeVisible()
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', new RegExp(`${formatterRoute.path}$`))
+  })
+}

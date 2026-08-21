@@ -5,12 +5,11 @@ import ToolPageShell from "@/components/ToolPageShell.vue";
 import { formatFileSize } from "@/composables/usePngToAvif";
 import {
   getSvgDimensions,
-  optimizeSvg,
   rasterizeSvg,
+  runSvgOptimizerWorker,
   svgDataUrl,
   svgOutputBaseName,
   svgSavings,
-  validateAndSanitizeSvg,
   type SvgOptimizeOptions,
 } from "@/composables/useSvgOptimizer";
 
@@ -33,6 +32,7 @@ const validationMessage = ref("");
 const errorMessage = ref("");
 const copied = ref("");
 const isOptimizing = ref(false);
+const isValidating = ref(false);
 const isExporting = ref(false);
 const exportWidth = ref(640);
 const exportHeight = ref(360);
@@ -46,18 +46,19 @@ const options = ref<SvgOptimizeOptions>({
   outputStyle: "minify",
 });
 let exportController: AbortController | null = null;
+let processingController: AbortController | null = null;
+const safePreviewSource = ref("");
 
 const comparison = computed(() => svgSavings(input.value, output.value || input.value));
 const previewUrl = computed(() => {
-  try {
-    return svgDataUrl(output.value || validateAndSanitizeSvg(input.value));
-  } catch {
-    return "";
-  }
+  const source = output.value || safePreviewSource.value;
+  return source ? svgDataUrl(source) : "";
 });
 
 watch(input, () => {
+  processingController?.abort();
   output.value = "";
+  safePreviewSource.value = "";
   validationMessage.value = "";
   errorMessage.value = "";
 });
@@ -67,35 +68,50 @@ function syncDimensions(source: string) {
   exportWidth.value = dimensions.width;
   exportHeight.value = dimensions.height;
 }
-function validate() {
+async function validate() {
+  if (isValidating.value || isOptimizing.value) return;
+  isValidating.value = true;
   errorMessage.value = "";
+  const controller = new AbortController();
+  processingController = controller;
   try {
-    const sanitized = validateAndSanitizeSvg(input.value);
-    const dimensions = getSvgDimensions(sanitized);
-    syncDimensions(sanitized);
-    validationMessage.value = `SVG valid · ${dimensions.width} × ${dimensions.height}`;
+    const result = await runSvgOptimizerWorker(input.value, undefined, controller.signal);
+    safePreviewSource.value = result.data;
+    syncDimensions(result.data);
+    validationMessage.value = `SVG valid · ${result.dimensions.width} × ${result.dimensions.height}`;
   } catch (error) {
     validationMessage.value = "";
-    errorMessage.value = error instanceof Error ? error.message : "SVG tidak valid.";
+    if (!(error instanceof DOMException && error.name === "AbortError"))
+      errorMessage.value = error instanceof Error ? error.message : "SVG tidak valid.";
+  } finally {
+    if (processingController === controller) processingController = null;
+    isValidating.value = false;
   }
 }
 async function runOptimize() {
-  if (isOptimizing.value) return;
+  if (isOptimizing.value || isValidating.value) return;
   isOptimizing.value = true;
   errorMessage.value = "";
+  const controller = new AbortController();
+  processingController = controller;
   try {
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-    const result = optimizeSvg(input.value, options.value);
+    const result = await runSvgOptimizerWorker(input.value, options.value, controller.signal);
     output.value = result.data;
+    safePreviewSource.value = result.data;
     exportWidth.value = result.dimensions.width;
     exportHeight.value = result.dimensions.height;
     validationMessage.value = `SVG valid dan berhasil dioptimasi · ${result.dimensions.width} × ${result.dimensions.height}`;
   } catch (error) {
     output.value = "";
-    errorMessage.value = error instanceof Error ? error.message : "SVG gagal dioptimasi.";
+    if (!(error instanceof DOMException && error.name === "AbortError"))
+      errorMessage.value = error instanceof Error ? error.message : "SVG gagal dioptimasi.";
   } finally {
+    if (processingController === controller) processingController = null;
     isOptimizing.value = false;
   }
+}
+function cancelOptimization() {
+  processingController?.abort();
 }
 function updateWidth() {
   if (!lockRatio.value) return;
@@ -172,10 +188,13 @@ async function handleFile(event: Event) {
   }
   input.value = await file.text();
   fileName.value = file.name;
-  validate();
+  await validate();
 }
-onBeforeUnmount(() => exportController?.abort());
-validate();
+onBeforeUnmount(() => {
+  processingController?.abort();
+  exportController?.abort();
+});
+void validate();
 </script>
 
 <template>
@@ -208,9 +227,10 @@ validate();
           <button
             type="button"
             class="min-h-11 rounded-xl border border-slate-200 font-bold dark:border-slate-700"
+            :disabled="isValidating || isOptimizing"
             @click="validate"
           >
-            <Icon icon="mdi:check-decagram-outline" class="mr-2 inline size-5" />Validate</button
+            <Icon :icon="isValidating ? 'mdi:loading' : 'mdi:check-decagram-outline'" class="mr-2 inline size-5" :class="{ 'animate-spin': isValidating }" />{{ isValidating ? "Memvalidasi..." : "Validate" }}</button
           ><button
             type="button"
             class="min-h-11 rounded-xl border border-slate-200 font-bold dark:border-slate-700"
@@ -290,7 +310,7 @@ validate();
       <button
         type="button"
         class="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 font-bold text-white disabled:opacity-50"
-        :disabled="isOptimizing"
+        :disabled="isOptimizing || isValidating"
         @click="runOptimize"
       >
         <Icon
@@ -298,6 +318,14 @@ validate();
           class="size-5"
           :class="{ 'animate-spin': isOptimizing }"
         />{{ isOptimizing ? "Mengoptimasi..." : "Optimize SVG" }}
+      </button>
+      <button
+        v-if="isOptimizing"
+        type="button"
+        class="mt-3 min-h-10 w-full rounded-xl bg-rose-50 font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"
+        @click="cancelOptimization"
+      >
+        Batalkan optimasi
       </button>
     </section>
     <section v-if="output" class="mt-7">
