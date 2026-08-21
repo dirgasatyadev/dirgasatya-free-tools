@@ -4,6 +4,8 @@ import { createAvifWorkerClient, encodeAvifInWorker, type AvifWorkerClient } fro
 import { useImageBatchQueue } from '@/composables/image/useImageBatchQueue'
 import { createUniqueFileName, normalizeImageBaseName } from '@/composables/image/fileNaming'
 
+export { formatFileSize } from '@/utils/fileSize'
+
 const maxFileSize = 25 * 1024 * 1024
 const maxPixels = 40_000_000
 export const maxPngFiles = 100
@@ -63,12 +65,6 @@ export function preparePngFiles(files: File[], currentCount: number): PreparedPn
   }
 
   return { acceptedFiles, errors }
-}
-
-export function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
 export function createAvifBaseName(fileName: string) {

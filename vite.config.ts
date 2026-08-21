@@ -10,6 +10,9 @@ export default defineConfig({
   build: {
     manifest: true,
   },
+  worker: {
+    format: 'es',
+  },
   plugins: [
     vue(),
     tailwindcss(),
