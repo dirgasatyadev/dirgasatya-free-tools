@@ -32,7 +32,7 @@ npm run test:e2e
 npm run icons:generate
 ```
 
-Build juga menghasilkan static SEO pages serta laporan ukuran bundle raw/gzip di `bundle-report.json` dan `bundle-report.md`. Budget homepage 250 KiB gzip berlaku mutlak. Largest route memiliki target 600 KiB gzip; baseline legacy yang masih di atas target tidak boleh bertambah lebih dari 10%. Pelanggaran budget atau gate regresi menghentikan build.
+Build juga menghasilkan static SEO pages serta laporan ukuran bundle raw/gzip di `bundle-report.json` dan `bundle-report.md`. Budget homepage 250 KiB gzip dan largest route 600 KiB gzip berlaku mutlak; pelanggaran budget menghentikan build. Worker memakai format ES agar parser dan engine berat tetap menjadi async chunk yang baru diambil ketika fitur terkait dijalankan, sedangkan file WASM dilacak terpisah.
 
 Playwright menjalankan 26 flow penting per browser, atau 52 test pada Chromium dan WebKit. Cakupannya meliputi route/SEO/404, image pipeline dan transfer, worker timeout, formatter, JSON tools, SVG optimizer, ZIP, serta export file. Perintah instalasi browser cukup dijalankan sekali pada mesin development.
 

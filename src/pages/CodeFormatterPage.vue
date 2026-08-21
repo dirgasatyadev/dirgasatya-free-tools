@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { Icon } from "@iconify/vue";
 import ToolPageShell from "@/components/ToolPageShell.vue";
-import { formatFileSize } from "@/composables/usePngToAvif";
+import { formatFileSize } from "@/utils/fileSize";
 import {
   codeByteSize,
   canMinifySqlDialect,
