@@ -17,6 +17,7 @@ export const changelog: ChangelogEntry[] = [
       { type: 'Peningkatan', text: 'Image Resizer mendukung exact canvas, fit within per file, dan percentage agar batch dengan aspect ratio campuran menghasilkan output yang terprediksi.' },
       { type: 'Infrastruktur', text: 'SVG Optimizer berjalan di worker; CI mengumpulkan coverage, menjalankan E2E Chromium dan WebKit, serta menerapkan hard bundle regression gate.' },
       { type: 'Infrastruktur', text: 'GitHub Actions, Dependabot, icon build gate, static SEO, canonical, sitemap, robots, dan halaman 404 production telah dipersiapkan untuk rilis stabil.' },
+      { type: 'Infrastruktur', text: 'Source code dirilis secara resmi menggunakan MIT License.' },
     ],
   },
   {
